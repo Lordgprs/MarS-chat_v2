@@ -4,7 +4,7 @@
 using namespace std;
 
 int main()
-{	
+{
 	cout << "Welcome to the chat!" << endl;
 	cout << "To output help, type /help" << endl;
 
@@ -13,7 +13,14 @@ int main()
 
 	while (true)
 	{
+		cout << "> ";
 		getline(cin, input_text);
+
+		if (input_text == "/exit") {
+			// closing the program
+			break;
+		}
+
 
 		try {
 			// working out the program algorithm
