@@ -5,9 +5,10 @@ using namespace std;
 int main()
 {
 	chat chat_obj;
+	chater* loggedUser = nullptr;
 
-	cout << "Welcome to the chat!" << endl;
-	cout << "To output help, type /help" << endl;
+	cout << "Welcome to the chat," << endl;
+	cout << "to output help, type /help" << endl;
 
 	
 
@@ -19,7 +20,6 @@ int main()
 		try {
 			// working out the program algorithm
 
-
 			cout << "> ";
 			getline(cin, input_text);
 
@@ -27,20 +27,27 @@ int main()
 				// output help
 				chat_obj.displayHelp();
 			}
+
 			else if (input_text == "/signup") {
 				// registration
-				string name, login, password;
+				if (loggedUser == nullptr) {
+					string name, login, password;
 
-				cout << "Enter login: ";
-				std::getline(std::cin, login);
+					cout << "Enter login: ";
+					std::getline(std::cin, login);
 
-				cout << "Enter password: ";
-				std::getline(std::cin, password);
+					cout << "Enter password: ";
+					std::getline(std::cin, password);
 
-				cout << "Enter name: ";
-				std::getline(std::cin, name);
+					cout << "Enter name: ";
+					std::getline(std::cin, name);
 
-				chat_obj.signup(login, password, name);
+					chat_obj.signup(login, password, name);
+					cout << "User registered successfully.\n" << endl;
+				}
+				else {
+					cout << "to register, enter /logout.\n" << endl;
+				}
 			}
 			else if (input_text == "/exit") {
 				// closing the program
@@ -54,9 +61,6 @@ int main()
 			cout << "Error: " << e.what() << "\n" << endl;
 		}
 	}
-
-
-
 
 	return 0;
 }

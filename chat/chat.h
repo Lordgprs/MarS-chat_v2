@@ -1,6 +1,8 @@
+#pragma once
 #include <iostream>
 #include <string>
-#pragma once
+#include <map>
+#include "chater.h"
 
 class chat
 {
@@ -21,11 +23,25 @@ public:
 		std::cout << "   not an addressable message for all users.\n" << std::endl;
 	}
 
+	// login availability
+	bool isLoginAvailable(const std::string& login) const {
+		return users.find(login) == users.end();
+	}
+
 	void signup(const std::string& login, const std::string& password, const std::string& name)
 	{
-		if (password.empty() || name.empty()) {
-			throw std::invalid_argument("Password and name cannot be empty.");
+		if (!isLoginAvailable(login)) {
+			throw std::invalid_argument("The login you entered is already in use.");
 		}
-	}
-};
 
+		if (login.empty() || password.empty()) {
+			// invalid argument passed
+			throw std::invalid_argument("Login or password cannot be empty.");
+		}
+
+		users.emplace(login, chater(login));
+	}
+
+private:
+	std::map<std::string, chater> users;
+};
