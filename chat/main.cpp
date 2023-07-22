@@ -20,7 +20,7 @@ int main()
 		try {
 			// working out the program algorithm
 
-			cout << "> ";
+			cout << (loggedUser ? loggedUser->getLogin() : "") << "> ";
 			getline(cin, input_text);
 
 			if (input_text == "/help") {
@@ -49,6 +49,24 @@ int main()
 					cout << "to register, enter /logout.\n" << endl;
 				}
 			}
+
+			else if (input_text == "/signin") {
+				// authorization
+				if (loggedUser != nullptr) {
+					cout << "to log in, enter /logout.\n" << endl;
+				}
+				else {
+					string login, password;
+					cout << "Enter login: ";
+					getline(std::cin, login);
+
+					cout << "Enter password: ";
+					getline(std::cin, password);
+
+					loggedUser = &chat_obj.signin(login, password);
+				}
+			}
+
 			else if (input_text == "/exit") {
 				// closing the program
 				break;

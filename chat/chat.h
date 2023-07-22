@@ -24,7 +24,8 @@ public:
 	}
 
 	// login availability
-	bool isLoginAvailable(const std::string& login) const {
+	bool isLoginAvailable(const std::string& login) const
+	{
 		return users.find(login) == users.end();
 	}
 
@@ -39,7 +40,18 @@ public:
 			throw std::invalid_argument("Login or password cannot be empty.");
 		}
 
-		users.emplace(login, chater(login));
+		users.emplace(login, chater(login, password));
+	}
+
+	chater& signin(const std::string& login, const std::string& password)
+	{
+		auto id = users.find(login);
+		if (id == users.end() || id->second.isAuthorized() || id->second.getLogin() != login || id->second.getPassword() != password) {
+			throw std::invalid_argument("Invalid login or password.");
+		}
+
+		id->second.setAuthorized(true);
+		return id->second;
 	}
 
 private:
