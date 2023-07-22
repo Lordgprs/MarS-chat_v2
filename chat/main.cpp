@@ -8,7 +8,7 @@ int main()
 	cout << "Welcome to the chat!" << endl;
 	cout << "To output help, type /help" << endl;
 
-	// хранит текст введеный пользователем
+	// stores user input
 	string input_text;
 
 	while (true)
@@ -16,10 +16,10 @@ int main()
 		getline(cin, input_text);
 
 		try {
-			// отработка алгоритма программы
+			// working out the program algorithm
 		}
 		catch (const exception e) {
-			// отработка исключений
+			// exception handling
 		}
 
 	}
