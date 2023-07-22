@@ -67,6 +67,17 @@ int main()
 				}
 			}
 
+			else if (input_text == "/logout") {
+				if (loggedUser == nullptr) {
+					std::cout << "You are not logged in.\n" << std::endl;
+				}
+				else {
+					chat_obj.signout(*loggedUser);
+					loggedUser = nullptr;
+					std::cout << "";
+				}
+			}
+
 			else if (input_text == "/exit") {
 				// closing the program
 				break;

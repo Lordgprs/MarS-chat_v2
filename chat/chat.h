@@ -54,6 +54,10 @@ public:
 		return id->second;
 	}
 
+	void signout(chater& user) {
+		user.setAuthorized(false);
+	}
+
 private:
 	std::map<std::string, chater> users;
 };
