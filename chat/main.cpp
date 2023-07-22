@@ -15,6 +15,13 @@ void displayHelp() {
 	std::cout << "     not an addressable message for all users.\n" << std::endl;
 }
 
+void signup(const string& login, const string& password, const string& name)
+{
+	if (password.empty() || name.empty()) {
+		throw std::invalid_argument("Password and name cannot be empty.");
+	}
+}
+
 int main()
 {
 	cout << "Welcome to the chat!" << endl;
@@ -25,26 +32,45 @@ int main()
 
 	while (true)
 	{
-		cout << "> ";
-		getline(cin, input_text);
-
-		if (input_text == "/help") {
-			displayHelp();
-		}
-		else if (input_text == "/exit") {
-			// closing the program
-			break;
-		}
-
-
 		try {
 			// working out the program algorithm
-		}
-		catch (const exception e) {
-			// exception handling
+
+
+			cout << "> ";
+			getline(cin, input_text);
+
+			if (input_text == "/help") {
+				// output help
+				displayHelp();
+			}
+			else if (input_text == "/signup") {
+				// registration
+				string name, login, password;
+
+				cout << "Enter login: ";
+				std::getline(std::cin, login);
+
+				cout << "Enter password: ";
+				std::getline(std::cin, password);
+
+				cout << "Enter name: ";
+				std::getline(std::cin, name);
+
+				signup(login, password, name);
+			}
+			else if (input_text == "/exit") {
+				// closing the program
+				break;
+			}
 		}
 
+		catch (const exception e) {
+			// exception handling
+
+			cout << "Error: " << e.what() << "\n" << endl;
+		}
 	}
+
 
 
 
