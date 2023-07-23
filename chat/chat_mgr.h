@@ -40,7 +40,23 @@ public:
 			throw std::invalid_argument("Login or password cannot be empty.");
 		}
 
+		if (!isValidLogin(login)) {
+			// invalid argument passed
+			throw std::invalid_argument("Login contains invalid characters.");
+		}
+
 		users.emplace(login, chat_user(login, password, name));
+	}
+
+	bool isValidLogin(const std::string& login) const 
+	{
+		// allowed characters, verification
+		for (char c : login) {
+			if (!std::isalnum(c) && c != '-' && c != '_') {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	chat_user& signIn(const std::string& login, const std::string& password)
