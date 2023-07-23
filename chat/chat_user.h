@@ -6,10 +6,10 @@ class chat_user
 {
 public:
 	// construct
-	chat_user(const std::string& login, const std::string& password, const std::string& name) 
+	chat_user(const std::string& login, const std::string& password, const std::string& name)
 		: login(login), password(password), name(name), authorized(false) {}
 
-	//Getter
+	//Getters
 	const std::string& getLogin() const { return login; }
 	const std::string& getPassword() const { return password; }
 	const std::string& getName() const { return name; }
@@ -19,6 +19,7 @@ public:
 		return authorized;
 	}
 
+	//Setters
 	void setAuthorized(bool value)
 	{
 		authorized = value;

@@ -29,7 +29,7 @@ public:
 		return users.find(login) == users.end();
 	}
 
-	void signup(const std::string& login, const std::string& password, const std::string& name)
+	void signUp(const std::string& login, const std::string& password, const std::string& name)
 	{
 		if (!isLoginAvailable(login)) {
 			throw std::invalid_argument("The login you entered is already in use.");
@@ -43,10 +43,11 @@ public:
 		users.emplace(login, chat_user(login, password, name));
 	}
 
-	chat_user& signin(const std::string& login, const std::string& password)
+	chat_user& signIn(const std::string& login, const std::string& password)
 	{
 		auto id = users.find(login);
 		if (id == users.end() || id->second.isAuthorized() || id->second.getLogin() != login || id->second.getPassword() != password) {
+			// invalid argument passed
 			throw std::invalid_argument("Invalid login or password.");
 		}
 
@@ -56,7 +57,12 @@ public:
 		return id->second;
 	}
 
-	void signout(chat_user& user) {
+	void signOut(chat_user& user) {
+		user.setAuthorized(false);
+	}
+
+	void removeUser(chat_user& user) {
+		users.erase(user.getLogin());
 		user.setAuthorized(false);
 	}
 

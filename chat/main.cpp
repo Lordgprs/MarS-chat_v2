@@ -10,7 +10,7 @@ int main()
 	cout << "Welcome to the chat," << endl;
 	cout << "to output help, type /help" << endl;
 
-	
+
 
 	// stores user input
 	string input_text;
@@ -42,7 +42,7 @@ int main()
 					cout << "Enter name: ";
 					std::getline(std::cin, name);
 
-					chat_obj.signup(login, password, name);
+					chat_obj.signUp(login, password, name);
 					cout << "User registered successfully.\n" << endl;
 				}
 				else {
@@ -63,7 +63,7 @@ int main()
 					cout << "Enter password: ";
 					getline(std::cin, password);
 
-					loggedUser = &chat_obj.signin(login, password);
+					loggedUser = &chat_obj.signIn(login, password);
 				}
 			}
 
@@ -72,9 +72,20 @@ int main()
 					std::cout << "You are not logged in.\n" << std::endl;
 				}
 				else {
-					chat_obj.signout(*loggedUser);
+					chat_obj.signOut(*loggedUser);
 					loggedUser = nullptr;
 					std::cout << "";
+				}
+			}
+
+			else if (input_text == "/remove") {
+				if (loggedUser == nullptr) {
+					std::cout << "You are not logged in.\n" << std::endl;
+				}
+				else {
+					chat_obj.removeUser(*loggedUser);
+					loggedUser = nullptr;
+					std::cout << "User removed successfully.\n" << std::endl;
 				}
 			}
 
