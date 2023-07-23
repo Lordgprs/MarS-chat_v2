@@ -2,13 +2,13 @@
 #include <iostream>
 #include <string>
 #include <map>
-#include "chater.h"
+#include "chat_user.h"
 
-class chat
+class chat_mgr
 {
 public:
 	// construct
-	chat() {}
+	chat_mgr() {}
 
 	// function help
 	void displayHelp() {
@@ -40,24 +40,26 @@ public:
 			throw std::invalid_argument("Login or password cannot be empty.");
 		}
 
-		users.emplace(login, chater(login, password));
+		users.emplace(login, chat_user(login, password, name));
 	}
 
-	chater& signin(const std::string& login, const std::string& password)
+	chat_user& signin(const std::string& login, const std::string& password)
 	{
 		auto id = users.find(login);
 		if (id == users.end() || id->second.isAuthorized() || id->second.getLogin() != login || id->second.getPassword() != password) {
 			throw std::invalid_argument("Invalid login or password.");
 		}
 
+		std::cout << id->second.getName() << " welcome to the chat!" << std::endl;
+
 		id->second.setAuthorized(true);
 		return id->second;
 	}
 
-	void signout(chater& user) {
+	void signout(chat_user& user) {
 		user.setAuthorized(false);
 	}
 
 private:
-	std::map<std::string, chater> users;
+	std::map<std::string, chat_user> users;
 };

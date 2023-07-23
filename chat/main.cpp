@@ -1,11 +1,11 @@
-#include "chat.h"
+#include "chat_mgr.h"
 
 using namespace std;
 
 int main()
 {
-	chat chat_obj;
-	chater* loggedUser = nullptr;
+	chat_mgr chat_obj;
+	chat_user* loggedUser = nullptr;
 
 	cout << "Welcome to the chat," << endl;
 	cout << "to output help, type /help" << endl;
