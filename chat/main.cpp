@@ -93,6 +93,17 @@ int main()
 				// closing the program
 				break;
 			}
+
+			else if (loggedUser != nullptr) {
+				// if there is an authorized user, we send a message
+				chat_obj.sendMessage(*loggedUser, input_text);
+			}
+
+			else
+			{
+				std::cout << "the command is not recognized, " << std::endl;
+				std::cout << "to output help, type /help\n" << std::endl;
+			}
 		}
 
 		catch (const exception e) {

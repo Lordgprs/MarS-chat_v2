@@ -51,7 +51,7 @@ public:
 			throw std::invalid_argument("Invalid login or password.");
 		}
 
-		std::cout << id->second.getName() << " welcome to the chat!" << std::endl;
+		std::cout << "Hi! " << id->second.getName() << " welcome to the chat!" << std::endl;
 
 		id->second.setAuthorized(true);
 		return id->second;
@@ -64,6 +64,55 @@ public:
 	void removeUser(chat_user& user) {
 		users.erase(user.getLogin());
 		user.setAuthorized(false);
+	}
+
+	void sendMessage(chat_user& sender, const std::string& message) const
+	{
+		if (!sender.isAuthorized()) {
+			// runtime error
+			throw std::runtime_error("User must be authorized to send a message.");
+		}
+
+		if (message.empty()) {
+			// invalid argument passed
+			throw std::invalid_argument("Message cannot be empty.");
+		}
+
+		if (message[0] == '@') {
+			size_t pos = message.find(' ');
+			if (pos != std::string::npos) {
+				std::string receiverName = message.substr(1, pos - 1);
+				std::string messageText = message.substr(pos + 1);
+				sendPrivateMessage(sender, receiverName, messageText);
+			}
+		}
+		else {
+			sendBroadcastMessage(sender, message);
+		}
+	}
+
+	void sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) const
+	{
+		auto id = std::find_if(users.begin(), users.end(), [&receiverName](const auto& entry) {
+			return entry.second.getLogin() == receiverName;
+		});
+
+		if (id != users.end()) {
+			std::cout << sender.getLogin() << " to " << receiverName << ": " << messageText << std::endl;
+		}
+		else {
+			throw std::runtime_error("The specified user does not exist or is not online.");
+		}
+	}
+
+	void sendBroadcastMessage(chat_user& sender, const std::string& message) const
+	{
+		for (const auto& entry : users) {
+			const chat_user& receiver = entry.second;
+			if (receiver.isAuthorized()) {
+				std::cout << sender.getLogin() << " to all: " << message << std::endl;
+			}
+		}
 	}
 
 private:
