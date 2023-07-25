@@ -1,8 +1,8 @@
 #pragma once
+#include "chat_user.h"
 #include <iostream>
 #include <string>
 #include <map>
-#include "chat_user.h"
 
 class chat_mgr
 {
@@ -17,22 +17,22 @@ public:
 	bool isLoginAvailable(const std::string& login) const;
 
 	// registration
-	void signUp(const std::string& login, const std::string& password, const std::string& name);
+	void signUp();
 
 	// login verification
 	bool isValidLogin(const std::string& login) const;
 
 	// authorization
-	chat_user& signIn(const std::string& login, const std::string& password);
+	chat_user *signIn();
 
 	// user logout
-	void signOut(chat_user& user);
+	void signOut();
 
 	// deleting a user
 	void removeUser(chat_user& user);
 
 	// sending a message
-	void sendMessage(chat_user& sender, const std::string& message) const;
+	void sendMessage(const std::string& message) const;
 
 	// sending a private message
 	void sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) const;
@@ -40,6 +40,10 @@ public:
 	// sending a shared message
 	void sendBroadcastMessage(chat_user& sender, const std::string& message) const;
 
+	// main work
+	void work();
+
 private:
-	std::map<std::string, chat_user> users;
+	std::map<std::string, chat_user> users_;
+	chat_user *loggedUser_;
 };
