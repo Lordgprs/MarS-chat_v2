@@ -114,7 +114,7 @@ void chat_mgr::removeUser(chat_user& user) {
 	std::cout << "User removed successfully.\n" << std::endl;
 }
 
-void chat_mgr::sendMessage(const std::string& message) const {
+void chat_mgr::sendMessage(const std::string& message) {
 	if (message.empty()) {
 		// invalid argument passed
 		throw std::invalid_argument("Message cannot be empty.");
@@ -133,27 +133,12 @@ void chat_mgr::sendMessage(const std::string& message) const {
 	}
 }
 
-void chat_mgr::sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) const {
-	auto id = std::find_if(users_.begin(), users_.end(), [&receiverName](const auto& entry) {
-		return entry.second.getLogin() == receiverName;
-	});
-
-	if (id != users_.end()) {
-		std::cout << sender.getLogin() << " to " << receiverName << ": " << messageText << std::endl;
-	}
-	else {
-		// runtime error
-		throw std::runtime_error("The specified user does not exist or is not online.");
-	}
+void chat_mgr::sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) {
+	messages_.emplace_back(std::make_shared<private_message>(sender.getLogin(), receiverName, messageText));
 }
 
-void chat_mgr::sendBroadcastMessage(chat_user& sender, const std::string& message) const {
-	for (const auto& entry : users_) {
-		const chat_user& receiver = entry.second;
-		if (receiver.isAuthorized()) {
-			std::cout << sender.getLogin() << " to all: " << message << std::endl;
-		}
-	}
+void chat_mgr::sendBroadcastMessage(chat_user& sender, const std::string& message) {
+	messages_.emplace_back(std::make_shared<broadcast_message>(sender.getLogin(), message, users_));
 }
 
 void chat_mgr::work() {
@@ -200,10 +185,19 @@ void chat_mgr::work() {
 					"to output help, type /help\n" 
 				<< std::endl;
 			}
+			if (loggedUser_ != nullptr) {
+				checkUnreadMessages();
+			}
 		}
 		catch (const std::exception e) {
 			// exception handling
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
+	}
+}
+
+void chat_mgr::checkUnreadMessages() {
+	for (auto &message : messages_) {
+		message->printIfUnreadByUser(loggedUser_->getLogin());
 	}
 }
