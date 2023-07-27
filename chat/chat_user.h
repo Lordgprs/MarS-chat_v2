@@ -2,9 +2,8 @@
 #include <iostream>
 #include <string>
 
-class chat_user {
+class chat_user final {
 public:
-	// constructor
 	chat_user(const std::string& login, const std::string& password, const std::string& name);
 
 	// getters

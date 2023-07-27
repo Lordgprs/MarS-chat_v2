@@ -5,7 +5,6 @@
 
 class chat_message {
 public:
-
 	// print the message
 	virtual void print() const = 0;
 

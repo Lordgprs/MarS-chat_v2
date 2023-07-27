@@ -1,5 +1,4 @@
 #pragma once
-
 #include "chat_user.h"
 #include "chat_message.h"
 #include "broadcast_message.h"
@@ -54,5 +53,5 @@ public:
 private:
 	std::map<std::string, chat_user> users_;
 	dynamic_array<std::shared_ptr<chat_message>> messages_;
-	chat_user *loggedUser_;
+	chat_user *loggedUser_{ nullptr };
 };

@@ -1,5 +1,4 @@
 #pragma once
-
 #include "bad_range.h"
 #include "bad_length.h"
 #include <iostream>
