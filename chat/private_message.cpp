@@ -1,7 +1,6 @@
 #include "private_message.h"
 #include "chat_message.h"
 #include "chat_user.h"
-
 #include <memory>
 #include <iostream>
 #include <string>

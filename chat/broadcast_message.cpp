@@ -1,5 +1,4 @@
 #include "broadcast_message.h"
-
 #include <iostream>
 
 broadcast_message::broadcast_message(const std::string &sender, const std::string &text, const std::map<std::string, chat_user> &user_list) :
