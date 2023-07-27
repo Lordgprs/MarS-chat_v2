@@ -25,4 +25,3 @@ private:
 	std::string name;
 	bool authorized;
 };
-

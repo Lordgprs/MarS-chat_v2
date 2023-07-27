@@ -4,8 +4,8 @@
 #include <map>
 #include <string>
 
-class broadcast_message :
-    public chat_message {
+class broadcast_message : public chat_message 
+{
 public:
   broadcast_message(const std::string &, const std::string &, const std::map<std::string, chat_user> &);
 
@@ -21,4 +21,3 @@ public:
 private:
   std::map<std::string, chat_user> users_unread_;
 };
-

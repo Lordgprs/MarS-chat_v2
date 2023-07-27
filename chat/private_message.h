@@ -1,9 +1,9 @@
 #pragma once
+
 #include "chat_message.h"
 #include <string>
 
-class private_message :
-    public chat_message {
+class private_message : public chat_message {
 public:
   private_message(const std::string &sender, const std::string &receiver, const std::string &text);
 
@@ -19,4 +19,3 @@ private:
   bool read_{ false };
   std::string receiver_;
 };
-

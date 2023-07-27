@@ -5,6 +5,14 @@
 chat_mgr::chat_mgr() {
 	std::cout << "Welcome to the chat," << std::endl;
 	std::cout << "to output help, type /help" << std::endl;
+
+	messages_ = nullptr;
+	numMessages_ = 0;
+}
+
+// destructor
+chat_mgr::~chat_mgr() {
+	delete[] messages_;
 }
 
 // function help
@@ -73,7 +81,7 @@ bool chat_mgr::isValidLogin(const std::string& login) const {
 chat_user *chat_mgr::signIn() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "to log in, enter /logout.\n" << std::endl;
-		return nullptr;
+		return loggedUser_;
 	}
 
 	std::string login, password;
@@ -134,11 +142,49 @@ void chat_mgr::sendMessage(const std::string& message) {
 }
 
 void chat_mgr::sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) {
-	messages_.emplace_back(std::make_shared<private_message>(sender.getLogin(), receiverName, messageText));
+	std::shared_ptr<chat_message> newMessage = std::make_shared<private_message>(sender.getLogin(), receiverName, messageText);
+	std::shared_ptr<chat_message>* newMessages = new std::shared_ptr<chat_message>[numMessages_ + 1];
+
+	for (size_t i = 0; i < numMessages_; i++) {
+		newMessages[i] = messages_[i];
+	}
+
+	// Add the new message to the end of the array
+	newMessages[numMessages_] = newMessage;
+
+	// Deallocate memory for the old array
+	delete[] messages_;
+
+	// Point messages_ to the new array
+	messages_ = newMessages;
+
+	// Update the number of messages
+	numMessages_++;
 }
 
 void chat_mgr::sendBroadcastMessage(chat_user& sender, const std::string& message) {
-	messages_.emplace_back(std::make_shared<broadcast_message>(sender.getLogin(), message, users_));
+	// Dynamically allocate memory for new message
+	std::shared_ptr<chat_message> newMessage = std::make_shared<broadcast_message>(sender.getLogin(), message, users_);
+
+	// Create a new dynamic array with one extra space for the new message
+	std::shared_ptr<chat_message>* newMessages = new std::shared_ptr<chat_message>[numMessages_ + 1];
+
+	// Copy existing messages to the new array
+	for (size_t i = 0; i < numMessages_; i++) {
+		newMessages[i] = messages_[i];
+	}
+
+	// Add the new message to the end of the array
+	newMessages[numMessages_] = newMessage;
+
+	// Deallocate memory for the old array
+	delete[] messages_;
+
+	// Point messages_ to the new array
+	messages_ = newMessages;
+
+	// Update the number of messages
+	numMessages_++;
 }
 
 void chat_mgr::work() {
@@ -197,7 +243,7 @@ void chat_mgr::work() {
 }
 
 void chat_mgr::checkUnreadMessages() {
-	for (auto &message : messages_) {
+	for (auto& message : *this) {
 		message->printIfUnreadByUser(loggedUser_->getLogin());
 	}
 }

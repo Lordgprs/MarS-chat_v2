@@ -5,6 +5,7 @@
 
 class chat_message {
 public:
+
 	// print the message
 	virtual void print() const = 0;
 
@@ -13,8 +14,8 @@ public:
 
 	// check if message is read
 	virtual bool isRead() const = 0;
+
 protected:
 	std::string text_;
 	std::string sender_;
 };
-

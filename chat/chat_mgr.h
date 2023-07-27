@@ -1,4 +1,5 @@
 #pragma once
+
 #include "chat_user.h"
 #include "chat_message.h"
 #include "broadcast_message.h"
@@ -6,7 +7,7 @@
 #include <iostream>
 #include <string>
 #include <map>
-#include <vector>
+//#include <vector>
 #include <memory>
 
 class chat_mgr
@@ -14,6 +15,9 @@ class chat_mgr
 public:
 	// construct
 	chat_mgr();
+
+	// destructor
+	~chat_mgr();
 
 	// function help
 	void displayHelp();
@@ -36,6 +40,10 @@ public:
 	// deleting a user
 	void removeUser(chat_user& user);
 
+	// Add functions to provide range-based for loop support
+	std::shared_ptr<chat_message>* begin() const { return messages_; }
+	std::shared_ptr<chat_message>* end() const { return messages_ + numMessages_; }
+
 	// sending a message
 	void sendMessage(const std::string& message);
 
@@ -53,6 +61,7 @@ public:
 
 private:
 	std::map<std::string, chat_user> users_;
-	std::vector<std::shared_ptr<chat_message>> messages_;
+	std::shared_ptr<chat_message>* messages_;
+	size_t numMessages_;
 	chat_user *loggedUser_;
 };
