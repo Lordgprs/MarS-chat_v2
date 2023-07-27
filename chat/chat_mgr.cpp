@@ -18,8 +18,9 @@ void chat_mgr::displayHelp() {
 		" /logout - user logout\n"
 		" /remove - delete registered user\n"
 		" /exit - close the program\n"
-		" @username is an addressable message,\n"
-		"   not an addressable message for all users.\n"
+		" Start your message with @login if you want to send a private message,\n"
+		"   otherwise your message will be broadcasted to all users.\n"
+		"User will receive new messages after login\n"
 		<< std::endl;
 }
 
@@ -88,7 +89,6 @@ void chat_mgr::signIn() {
 
 	auto it = users_.find(login);
 	if (it == users_.end() || 
-		it->second.isAuthorized() || 
 		it->second.getLogin() != login || 
 		it->second.getPassword() != password) {
 		// invalid argument passed
@@ -97,7 +97,6 @@ void chat_mgr::signIn() {
 
 	std::cout << "Hi! " << it->second.getName() << ", welcome to the chat!\n" << std::endl;
 
-	it->second.setAuthorized(true);
 	loggedUser_ = &it->second;
 }
 
@@ -106,7 +105,7 @@ void chat_mgr::signOut() {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
 	}
-	loggedUser_->setAuthorized(false);
+
 	loggedUser_ = nullptr;
 }
 
