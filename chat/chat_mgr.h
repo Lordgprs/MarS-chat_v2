@@ -3,9 +3,9 @@
 #include "chat_message.h"
 #include "broadcast_message.h"
 #include "private_message.h"
-#include "dynamic_array.h"
 #include <iostream>
 #include <string>
+#include <vector>
 #include <map>
 #include <memory>
 
@@ -52,6 +52,6 @@ public:
 
 private:
 	std::map<std::string, chat_user> users_;
-	dynamic_array<std::shared_ptr<chat_message>> messages_;
+	std::vector<std::shared_ptr<chat_message>> messages_;
 	chat_user *loggedUser_{ nullptr };
 };

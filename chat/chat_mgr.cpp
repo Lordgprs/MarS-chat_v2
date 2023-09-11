@@ -142,12 +142,12 @@ void chat_mgr::sendPrivateMessage(chat_user& sender, const std::string& receiver
 	if (users_.find(receiverName) == users_.end()) {
 		throw std::invalid_argument("User @" + receiverName + " does not exist");
 	}
-	messages_.pushBack(std::make_shared<private_message>(sender.getLogin(), receiverName, messageText));
+	messages_.emplace_back(std::make_shared<private_message>(sender.getLogin(), receiverName, messageText));
 }
 
 void chat_mgr::sendBroadcastMessage(chat_user& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
-	messages_.pushBack(std::make_shared<broadcast_message>(sender.getLogin(), message, users_));
+	messages_.emplace_back(std::make_shared<broadcast_message>(sender.getLogin(), message, users_));
 }
 
 void chat_mgr::work() {
@@ -206,7 +206,7 @@ void chat_mgr::work() {
 }
 
 void chat_mgr::checkUnreadMessages() {
-	for (int i = 0; i < messages_.getLength(); ++i) {
+	for (int i = 0; i < messages_.size(); ++i) {
 		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
 	}
 }
