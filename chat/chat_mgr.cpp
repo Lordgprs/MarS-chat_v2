@@ -60,7 +60,7 @@ void chat_mgr::signUp() {
 		throw std::invalid_argument("Login contains invalid characters.");
 	}
 
-	users_.emplace(login, chat_user(login, password, name));
+	users_.emplace(login, ChatUser(login, password, name));
 	std::cout << "User registered successfully.\n" << std::endl;
 }
 
@@ -109,7 +109,7 @@ void chat_mgr::signOut() {
 	loggedUser_ = nullptr;
 }
 
-void chat_mgr::removeUser(chat_user& user) {
+void chat_mgr::removeUser(ChatUser& user) {
 	if (loggedUser_ == nullptr) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
@@ -138,16 +138,16 @@ void chat_mgr::sendMessage(const std::string& message) {
 	}
 }
 
-void chat_mgr::sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText) {
+void chat_mgr::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
 	if (users_.find(receiverName) == users_.end()) {
 		throw std::invalid_argument("User @" + receiverName + " does not exist");
 	}
-	messages_.emplace_back(std::make_shared<private_message>(sender.getLogin(), receiverName, messageText));
+	messages_.emplace_back(std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText));
 }
 
-void chat_mgr::sendBroadcastMessage(chat_user& sender, const std::string& message) {
+void chat_mgr::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
-	messages_.emplace_back(std::make_shared<broadcast_message>(sender.getLogin(), message, users_));
+	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
 }
 
 void chat_mgr::work() {
