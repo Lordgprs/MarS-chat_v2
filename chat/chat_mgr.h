@@ -3,9 +3,9 @@
 #include "chat_message.h"
 #include "broadcast_message.h"
 #include "private_message.h"
-#include "dynamic_array.h"
 #include <iostream>
 #include <string>
+#include <vector>
 #include <map>
 #include <memory>
 
@@ -33,16 +33,16 @@ public:
 	void signOut();
 
 	// deleting a user
-	void removeUser(chat_user& user);
+	void removeUser(ChatUser& user);
 
 	// sending a message
 	void sendMessage(const std::string& message);
 
 	// sending a private message
-	void sendPrivateMessage(chat_user& sender, const std::string& receiverName, const std::string& messageText);
+	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText);
 
 	// sending a shared message
-	void sendBroadcastMessage(chat_user& sender, const std::string& message);
+	void sendBroadcastMessage(ChatUser& sender, const std::string& message);
 
 	// main work
 	void work();
@@ -51,7 +51,7 @@ public:
 	void checkUnreadMessages();
 
 private:
-	std::map<std::string, chat_user> users_;
-	dynamic_array<std::shared_ptr<chat_message>> messages_;
-	chat_user *loggedUser_{ nullptr };
+	std::map<std::string, ChatUser> users_;
+	std::vector<std::shared_ptr<ChatMessage>> messages_;
+	ChatUser *loggedUser_{ nullptr };
 };

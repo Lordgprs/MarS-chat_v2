@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-class chat_message {
+class ChatMessage {
 public:
 	// print the message
 	virtual void print() const = 0;

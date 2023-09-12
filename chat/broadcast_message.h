@@ -4,10 +4,10 @@
 #include <map>
 #include <string>
 
-class broadcast_message final : public chat_message 
+class BroadcastMessage final : public ChatMessage 
 {
 public:
-  broadcast_message(const std::string &, const std::string &, const std::map<std::string, chat_user> &);
+  BroadcastMessage(const std::string &, const std::string &, const std::map<std::string, ChatUser> &);
 
   // print the message
   void print() const override;
@@ -19,5 +19,5 @@ public:
   bool isRead() const override;
 
 private:
-  std::map<std::string, chat_user> users_unread_;
+  std::map<std::string, ChatUser> users_unread_;
 };

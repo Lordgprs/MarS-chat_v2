@@ -2,9 +2,9 @@
 #include "chat_message.h"
 #include <string>
 
-class private_message final : public chat_message {
+class PrivateMessage final : public ChatMessage {
 public:
-  private_message(const std::string &sender, const std::string &receiver, const std::string &text);
+  PrivateMessage(const std::string &sender, const std::string &receiver, const std::string &text);
 
   // print the message
   void print() const override;
