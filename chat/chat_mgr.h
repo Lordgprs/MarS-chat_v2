@@ -9,10 +9,10 @@
 #include <map>
 #include <memory>
 
-class chat_mgr final {
+class ChatMgr final {
 public:
 	// construct
-	chat_mgr();
+	ChatMgr();
 
 	// function help
 	void displayHelp();

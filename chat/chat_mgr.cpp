@@ -2,7 +2,7 @@
 #include <string>
 
 // construct
-chat_mgr::chat_mgr() {
+ChatMgr::ChatMgr() {
 	std::cout <<
 		"Welcome to the chat,\n"
 		"to view help, type /help"
@@ -10,7 +10,7 @@ chat_mgr::chat_mgr() {
 }
 
 // function help
-void chat_mgr::displayHelp() {
+void ChatMgr::displayHelp() {
 	std::cout << "Available commands:\n"
 		" /help - chat help, displays a list of commands to manage the chat\n"
 		" /signup - registration, user enters data for registration\n"
@@ -25,11 +25,11 @@ void chat_mgr::displayHelp() {
 }
 
 // login availability
-bool chat_mgr::isLoginAvailable(const std::string& login) const {
+bool ChatMgr::isLoginAvailable(const std::string& login) const {
 	return users_.find(login) == users_.end();
 }
 
-void chat_mgr::signUp() {
+void ChatMgr::signUp() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "to register, enter /logout.\n" << std::endl;
 		return;
@@ -64,7 +64,7 @@ void chat_mgr::signUp() {
 	std::cout << "User registered successfully.\n" << std::endl;
 }
 
-bool chat_mgr::isValidLogin(const std::string& login) const {
+bool ChatMgr::isValidLogin(const std::string& login) const {
 	// allowed characters, verification
 	for (const char c : login) {
 		if (!std::isalnum(c) && c != '-' && c != '_') {
@@ -74,7 +74,7 @@ bool chat_mgr::isValidLogin(const std::string& login) const {
 	return true;
 }
 
-void chat_mgr::signIn() {
+void ChatMgr::signIn() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "For log in you must sign out first. Enter '/logout' to sign out\n" << std::endl;
 		return;
@@ -100,7 +100,7 @@ void chat_mgr::signIn() {
 	loggedUser_ = &it->second;
 }
 
-void chat_mgr::signOut() {
+void ChatMgr::signOut() {
 	if (loggedUser_ == nullptr) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
@@ -109,7 +109,7 @@ void chat_mgr::signOut() {
 	loggedUser_ = nullptr;
 }
 
-void chat_mgr::removeUser(ChatUser& user) {
+void ChatMgr::removeUser(ChatUser& user) {
 	if (loggedUser_ == nullptr) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
@@ -119,7 +119,7 @@ void chat_mgr::removeUser(ChatUser& user) {
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
-void chat_mgr::sendMessage(const std::string& message) {
+void ChatMgr::sendMessage(const std::string& message) {
 	if (message.empty()) {
 		// invalid argument passed
 		throw std::invalid_argument("Message cannot be empty");
@@ -138,19 +138,19 @@ void chat_mgr::sendMessage(const std::string& message) {
 	}
 }
 
-void chat_mgr::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
+void ChatMgr::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
 	if (users_.find(receiverName) == users_.end()) {
 		throw std::invalid_argument("User @" + receiverName + " does not exist");
 	}
 	messages_.emplace_back(std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText));
 }
 
-void chat_mgr::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
+void ChatMgr::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
 	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
 }
 
-void chat_mgr::work() {
+void ChatMgr::work() {
 	// stores user input
 	std::string input_text;
 
@@ -205,7 +205,7 @@ void chat_mgr::work() {
 	}
 }
 
-void chat_mgr::checkUnreadMessages() {
+void ChatMgr::checkUnreadMessages() {
 	for (int i = 0; i < messages_.size(); ++i) {
 		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
 	}
