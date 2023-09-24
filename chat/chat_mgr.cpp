@@ -1,5 +1,6 @@
 #include "chat_mgr.h"
 #include <string>
+#include <fstream>
 
 // construct
 ChatMgr::ChatMgr() {
@@ -198,7 +199,7 @@ void ChatMgr::work() {
 				checkUnreadMessages();
 			}
 		}
-		catch (const std::exception e) {
+		catch (std::invalid_argument e) {
 			// exception handling
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
