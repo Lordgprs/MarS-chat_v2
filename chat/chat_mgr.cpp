@@ -1,5 +1,6 @@
 #include "chat_mgr.h"
 #include <string>
+#include <fstream>
 
 // construct
 ChatMgr::ChatMgr() {
@@ -198,17 +199,8 @@ void ChatMgr::work() {
 				checkUnreadMessages();
 			}
 		}
-		catch (const std::exception e) {
+		catch (std::invalid_argument e) {
 			// exception handling
-			if (std::cin.fail()) {
-				std::cout << "Error: failbit has occured\n" << std::endl;
-			}
-			else if (std::cin.eof()) {
-				std::cout << "Error: EOF has occured. Probably you have entered an empty string?\n" << std::endl;
-			}
-			else if (std::cin.bad()) {
-				std::cout << "Error: badbit has occured\n" << std::endl;
-			}
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
 	}
