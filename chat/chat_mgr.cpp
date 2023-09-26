@@ -62,13 +62,13 @@ void ChatMgr::signUp() {
 	}
 
 	users_.emplace(login, ChatUser(login, password, name));
-	//try {
-	auto it = users_.find(login);
-	it->second.save(USER_CONFIG);
-	//}
-	//catch (const std::runtime_error &e) {
-	//	std::cerr << e.what() << std::endl;
-	//}
+	try {
+		//users_.at(login).save(USER_CONFIG);
+		users_[login].save(USER_CONFIG);
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
 	std::cout << "User registered successfully.\n" << std::endl;
 }
 
@@ -186,7 +186,9 @@ void ChatMgr::work() {
 			}
 			else if (input_text == "/remove") {
 				// removing current user
-				removeUser(*loggedUser_);
+				if (loggedUser_) {
+					removeUser(*loggedUser_);
+				}
 			}
 			else if (input_text == "/exit") {
 				// closing the program
