@@ -3,6 +3,7 @@
 #include "chat_message.h"
 #include "broadcast_message.h"
 #include "private_message.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -54,4 +55,5 @@ private:
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
 	ChatUser *loggedUser_{ nullptr };
+	const std::string USER_CONFIG{ "users.cfg" };
 };

@@ -48,12 +48,12 @@ void ChatMgr::signUp() {
 	std::getline(std::cin, name);
 
 	if (!isLoginAvailable(login)) {
-		throw std::invalid_argument("The login you entered is already in use.");
+		throw std::invalid_argument("The login you entered has been already registered.");
 	}
 
 	if (login.empty() || password.empty()) {
 		// invalid argument passed
-		throw std::invalid_argument("Login or password cannot be empty.");
+		throw std::invalid_argument("Login and password cannot be empty.");
 	}
 
 	if (!isValidLogin(login)) {
@@ -62,6 +62,13 @@ void ChatMgr::signUp() {
 	}
 
 	users_.emplace(login, ChatUser(login, password, name));
+	//try {
+	auto it = users_.find(login);
+	it->second.save(USER_CONFIG);
+	//}
+	//catch (const std::runtime_error &e) {
+	//	std::cerr << e.what() << std::endl;
+	//}
 	std::cout << "User registered successfully.\n" << std::endl;
 }
 

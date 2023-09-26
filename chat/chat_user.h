@@ -10,9 +10,10 @@ public:
 	const std::string& getLogin() const;
 	const std::string& getPassword() const;
 	const std::string& getName() const;
+	void save(const std::string &filename) const;
 
 private:
-	std::string login;
-	std::string password;
-	std::string name;
+	std::string login_;
+	std::string password_;
+	std::string name_;
 };
