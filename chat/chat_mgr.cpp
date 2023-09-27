@@ -1,9 +1,15 @@
 #include "chat_mgr.h"
+
 #include <string>
 #include <fstream>
+#include <filesystem>
+#include <stdexcept>
+
+namespace fs = std::filesystem;
 
 // construct
 ChatMgr::ChatMgr() {
+	fs::current_path(".");
 	std::cout <<
 		"Welcome to the chat,\n"
 		"to view help, type /help"
@@ -63,8 +69,7 @@ void ChatMgr::signUp() {
 
 	users_.emplace(login, ChatUser(login, password, name));
 	try {
-		//users_.at(login).save(USER_CONFIG);
-		users_[login].save(USER_CONFIG);
+		users_.at(login).save(USER_CONFIG);
 	}
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
@@ -124,6 +129,7 @@ void ChatMgr::removeUser(ChatUser& user) {
 	}
 	signOut();
 	users_.erase(user.getLogin());
+	usersFileMustBeUpdated_ = true;
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
@@ -213,10 +219,92 @@ void ChatMgr::work() {
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
 	}
+
+	if (usersFileMustBeUpdated_) {
+		saveUsers();
+	}
 }
 
 void ChatMgr::checkUnreadMessages() {
 	for (int i = 0; i < messages_.size(); ++i) {
 		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
 	}
+}
+
+void ChatMgr::saveUsers() const {
+	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
+	}
+	file.close();
+
+	for (auto it = users_.begin(); it != users_.end(); ++it) {
+		it->second.save(USER_CONFIG);		
+	}
+}
+
+void ChatMgr::saveMessages() const {	
+	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
+	}
+	file.close();
+
+	for (const auto &msg: messages_) {
+		msg->save(MESSAGES_LOG);		
+	}
+}
+
+void ChatMgr::loadUsers() {
+	std::ifstream file(USER_CONFIG, std::ios::in);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
+	}
+
+	while (!file.eof()) {
+		std::string login;
+		std::string password;
+		std::string name;
+		getline(file, login);
+		getline(file, password);
+		getline(file, name);
+		users_.emplace(login, ChatUser(login, password, name));
+	}
+	file.close();
+}
+
+void ChatMgr::loadMessages() {
+	std::ifstream file(MESSAGES_LOG, std::ios::in);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Error: cannot open file " + MESSAGES_LOG + " for read" };
+	}
+	while (!file.eof()) {
+		std::string message_type;
+		std::string sender;
+		std::string text;
+
+		getline(file, message_type);
+		getline(file, sender);
+		if (message_type == "BROADCAST") {
+			std::string users_unread_str;
+			
+			getline(file, users_unread_str);
+			getline(file, text);
+
+			messages_.emplace_back(std::make_shared<BroadcastMessage>(sender, text, users_, users_unread_str));
+		}
+		else if (message_type == "PRIVATE") {
+			std::string receiver;
+			std::string is_read_str;
+			bool is_read;
+
+			getline(file, receiver);
+			getline(file, is_read_str);
+			is_read = (is_read_str == "READ");
+			getline(file, text);
+
+			messages_.emplace_back(std::make_shared<PrivateMessage>(sender, receiver, text, is_read));
+		}
+	}
+	file.close();
 }
