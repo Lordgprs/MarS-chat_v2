@@ -1,0 +1,18 @@
+PRIVATE
+max
+vpipkin
+UNREAD
+test private 1
+PRIVATE
+max
+max2
+UNREAD
+test private 2
+BROADCAST
+max
+
+test broadcast 1
+BROADCAST
+max
+
+test broadcast 2

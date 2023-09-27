@@ -10,10 +10,26 @@ namespace fs = std::filesystem;
 // construct
 ChatMgr::ChatMgr() {
 	fs::current_path(".");
+	try {
+		loadUsers();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
+	try {
+		loadMessages();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
 	std::cout <<
 		"Welcome to the chat,\n"
-		"to view help, type /help"
-		<< std::endl;
+		"to view help, type /help\n"
+		"Registered users: ";
+	for (const auto kv: users_) {
+		std::cout << '\'' << kv.first << "' ";
+	}
+	std::cout << '\n' << std::endl;
 }
 
 // function help
@@ -196,7 +212,9 @@ void ChatMgr::work() {
 					removeUser(*loggedUser_);
 				}
 			}
-			else if (input_text == "/exit") {
+			else if (
+				input_text == "/exit" ||
+				input_text == "/quit") {
 				// closing the program
 				break;
 			}
@@ -221,7 +239,18 @@ void ChatMgr::work() {
 	}
 
 	if (usersFileMustBeUpdated_) {
-		saveUsers();
+		try {
+			saveUsers();
+		}
+		catch (const std::runtime_error &e) {
+			std::cerr << e.what() << std::endl;
+		}
+	}
+	try {
+		saveMessages();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
 	}
 }
 
@@ -232,6 +261,7 @@ void ChatMgr::checkUnreadMessages() {
 }
 
 void ChatMgr::saveUsers() const {
+	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
 	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
 		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
@@ -244,9 +274,10 @@ void ChatMgr::saveUsers() const {
 }
 
 void ChatMgr::saveMessages() const {	
+	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
 	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
+		throw std::runtime_error{ "Cannot open file " + MESSAGES_LOG + " for write" };
 	}
 	file.close();
 
@@ -268,7 +299,9 @@ void ChatMgr::loadUsers() {
 		getline(file, login);
 		getline(file, password);
 		getline(file, name);
-		users_.emplace(login, ChatUser(login, password, name));
+		if (!login.empty()) {
+			users_.emplace(login, ChatUser(login, password, name));
+		}
 	}
 	file.close();
 }

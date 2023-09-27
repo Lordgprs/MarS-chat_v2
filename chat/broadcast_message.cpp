@@ -63,7 +63,7 @@ void BroadcastMessage::save(const std::string &filename) const {
 		}
 		++i;
 	}
-	file << text_ << std::endl;
+	file << '\n' << text_ << std::endl;
 	file.close();
 }
 
