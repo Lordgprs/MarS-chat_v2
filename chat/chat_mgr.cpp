@@ -1,13 +1,35 @@
 #include "chat_mgr.h"
+
 #include <string>
 #include <fstream>
+#include <filesystem>
+#include <stdexcept>
+
+namespace fs = std::filesystem;
 
 // construct
 ChatMgr::ChatMgr() {
+	fs::current_path(".");
+	try {
+		loadUsers();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
+	try {
+		loadMessages();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
 	std::cout <<
 		"Welcome to the chat,\n"
-		"to view help, type /help"
-		<< std::endl;
+		"to view help, type /help\n"
+		"Registered users: ";
+	for (const auto kv: users_) {
+		std::cout << '\'' << kv.first << "' ";
+	}
+	std::cout << '\n' << std::endl;
 }
 
 // function help
@@ -48,12 +70,12 @@ void ChatMgr::signUp() {
 	std::getline(std::cin, name);
 
 	if (!isLoginAvailable(login)) {
-		throw std::invalid_argument("The login you entered is already in use.");
+		throw std::invalid_argument("The login you entered has been already registered.");
 	}
 
 	if (login.empty() || password.empty()) {
 		// invalid argument passed
-		throw std::invalid_argument("Login or password cannot be empty.");
+		throw std::invalid_argument("Login and password cannot be empty.");
 	}
 
 	if (!isValidLogin(login)) {
@@ -62,6 +84,12 @@ void ChatMgr::signUp() {
 	}
 
 	users_.emplace(login, ChatUser(login, password, name));
+	try {
+		users_.at(login).save(USER_CONFIG);
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
 	std::cout << "User registered successfully.\n" << std::endl;
 }
 
@@ -117,6 +145,7 @@ void ChatMgr::removeUser(ChatUser& user) {
 	}
 	signOut();
 	users_.erase(user.getLogin());
+	usersFileMustBeUpdated_ = true;
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
@@ -179,9 +208,13 @@ void ChatMgr::work() {
 			}
 			else if (input_text == "/remove") {
 				// removing current user
-				removeUser(*loggedUser_);
+				if (loggedUser_) {
+					removeUser(*loggedUser_);
+				}
 			}
-			else if (input_text == "/exit") {
+			else if (
+				input_text == "/exit" ||
+				input_text == "/quit") {
 				// closing the program
 				break;
 			}
@@ -204,10 +237,107 @@ void ChatMgr::work() {
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
 	}
+
+	if (usersFileMustBeUpdated_) {
+		try {
+			saveUsers();
+		}
+		catch (const std::runtime_error &e) {
+			std::cerr << e.what() << std::endl;
+		}
+	}
+	try {
+		saveMessages();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	}
 }
 
 void ChatMgr::checkUnreadMessages() {
 	for (int i = 0; i < messages_.size(); ++i) {
 		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
 	}
+}
+
+void ChatMgr::saveUsers() const {
+	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
+	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
+	}
+	file.close();
+
+	for (auto it = users_.begin(); it != users_.end(); ++it) {
+		it->second.save(USER_CONFIG);		
+	}
+}
+
+void ChatMgr::saveMessages() const {	
+	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
+	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Cannot open file " + MESSAGES_LOG + " for write" };
+	}
+	file.close();
+
+	for (const auto &msg: messages_) {
+		msg->save(MESSAGES_LOG);		
+	}
+}
+
+void ChatMgr::loadUsers() {
+	std::ifstream file(USER_CONFIG, std::ios::in);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
+	}
+
+	while (!file.eof()) {
+		std::string login;
+		std::string password;
+		std::string name;
+		getline(file, login);
+		getline(file, password);
+		getline(file, name);
+		if (!login.empty()) {
+			users_.emplace(login, ChatUser(login, password, name));
+		}
+	}
+	file.close();
+}
+
+void ChatMgr::loadMessages() {
+	std::ifstream file(MESSAGES_LOG, std::ios::in);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Error: cannot open file " + MESSAGES_LOG + " for read" };
+	}
+	while (!file.eof()) {
+		std::string message_type;
+		std::string sender;
+		std::string text;
+
+		getline(file, message_type);
+		getline(file, sender);
+		if (message_type == "BROADCAST") {
+			std::string users_unread_str;
+			
+			getline(file, users_unread_str);
+			getline(file, text);
+
+			messages_.emplace_back(std::make_shared<BroadcastMessage>(sender, text, users_, users_unread_str));
+		}
+		else if (message_type == "PRIVATE") {
+			std::string receiver;
+			std::string is_read_str;
+			bool is_read;
+
+			getline(file, receiver);
+			getline(file, is_read_str);
+			is_read = (is_read_str == "READ");
+			getline(file, text);
+
+			messages_.emplace_back(std::make_shared<PrivateMessage>(sender, receiver, text, is_read));
+		}
+	}
+	file.close();
 }

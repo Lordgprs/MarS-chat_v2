@@ -3,6 +3,7 @@
 #include "chat_message.h"
 #include "broadcast_message.h"
 #include "private_message.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -49,9 +50,25 @@ public:
 
 	// check unread messages
 	void checkUnreadMessages();
+	
+	// save all users (i. e. after removing some of them) to file
+	void saveUsers() const;
+
+	// save all messages to file
+	void saveMessages() const;
+
+	// load user list from file
+	void loadUsers();
+
+	// load message list from file
+	void loadMessages();
+
 
 private:
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
 	ChatUser *loggedUser_{ nullptr };
+	bool usersFileMustBeUpdated_ { false };
+	const std::string USER_CONFIG{ "users.cfg" };
+	const std::string MESSAGES_LOG{ "messages.log" };
 };

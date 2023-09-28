@@ -6,7 +6,7 @@ PREFIX = /usr/local/bin
 chat: $(SRC) build
 
 build:
-	g++ -o $(TARGET) $(SRC) -L.
+	g++ --std=c++20 -o $(TARGET) $(SRC) -L.
 
 clean:
 	rm -rf *.o $(TARGET)
