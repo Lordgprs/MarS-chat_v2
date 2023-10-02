@@ -75,8 +75,10 @@ private:
 	// print information about process and OS
 	void printSystemInformation() const;
 
+#if defined(_WIN64) or defined(_WIN32)
 	// Get literal version, i.e. 5.0 is Windows 2000
 	std::string getLiteralOSName(OSVERSIONINFOEX &osv) const;
+#endif
 
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
