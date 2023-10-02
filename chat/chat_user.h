@@ -1,4 +1,6 @@
 #pragma once
+#include "SHA256.h"
+
 #include <iostream>
 #include <string>
 

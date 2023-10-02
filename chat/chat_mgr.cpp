@@ -1,4 +1,5 @@
 #include "chat_mgr.h"
+#include "SHA256.h"
 
 #include <string>
 #include <fstream>
@@ -32,10 +33,16 @@ ChatMgr::ChatMgr() {
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
 	}
+
 	std::cout <<
 		"Welcome to the chat,\n"
-		"to view help, type /help\n"
-		"Registered users: ";
+		"to view help, type /help" << std::endl;
+
+	if(users_.empty()) {
+		return;
+	}
+
+	std::cout << "Registered users: ";
 	for (const auto kv: users_) {
 		std::cout << '\'' << kv.first << "' ";
 	}
@@ -68,7 +75,7 @@ void ChatMgr::signUp() {
 		return;
 	}
 
-	std::string name, login, password;
+	std::string name, login, password, hash;
 
 	std::cout << "Enter login: ";
 	std::getline(std::cin, login);
@@ -92,8 +99,14 @@ void ChatMgr::signUp() {
 		// invalid argument passed
 		throw std::invalid_argument("Login contains invalid characters.");
 	}
+	
+	SHA256 sha;
+	sha.update(password);
+	uint8_t *digest = sha.digest();
+	hash = SHA256::toString(digest);
+	delete[] digest;
 
-	users_.emplace(login, ChatUser(login, password, name));
+	users_.emplace(login, ChatUser(login, hash, name));
 	try {
 		users_.at(login).save(USER_CONFIG);
 	}
@@ -119,19 +132,26 @@ void ChatMgr::signIn() {
 		return;
 	}
 
-	std::string login, password;
+	std::string login, password, hash;
 
 	std::cout << "Enter login: ";
 	getline(std::cin, login);
 	std::cout << "Enter password: ";
 	getline(std::cin, password);
 
+	SHA256 sha;
+	sha.update(password);
+	uint8_t *digest = sha.digest();
+	hash = SHA256::toString(digest);
+	delete[] digest;
+
+
 	auto it = users_.find(login);
 	if (it == users_.end() || 
 		it->second.getLogin() != login || 
-		it->second.getPassword() != password) {
+		it->second.getPassword() != hash) {
 		// invalid argument passed
-		throw std::invalid_argument("Invalid login or password");
+		throw std::invalid_argument("Invalid login or password!");
 	}
 
 	std::cout << "Hi! " << it->second.getName() << ", welcome to the chat!\n" << std::endl;
