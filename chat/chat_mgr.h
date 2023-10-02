@@ -14,10 +14,14 @@ class ChatMgr final {
 public:
 	// construct
 	ChatMgr();
+	
+	// main work
+	void work();
 
 	// function help
 	void displayHelp();
 
+private:
 	// login availability
 	bool isLoginAvailable(const std::string& login) const;
 
@@ -45,9 +49,6 @@ public:
 	// sending a shared message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message);
 
-	// main work
-	void work();
-
 	// check unread messages
 	void checkUnreadMessages();
 	
@@ -63,8 +64,8 @@ public:
 	// load message list from file
 	void loadMessages();
 
-
-private:
+	// print information about process and OS
+	void printSystemInformation() const;
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
 	ChatUser *loggedUser_{ nullptr };

@@ -4,11 +4,17 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#if defined(__linux__)
+#include <unistd.h>
+#include <sys/utsname.h>
+#endif
 
 namespace fs = std::filesystem;
 
 // construct
 ChatMgr::ChatMgr() {
+	printSystemInformation();
+
 	fs::current_path(".");
 	try {
 		loadUsers();
@@ -340,4 +346,16 @@ void ChatMgr::loadMessages() {
 		}
 	}
 	file.close();
+}
+
+void ChatMgr::printSystemInformation() const {
+#if defined(__linux__)
+	utsname uts;
+	uname(&uts);
+
+	auto pid = getpid();
+
+	std::cout << "Current process ID: " << pid << std::endl;
+	std::cout << "OS " << uts.sysname << " (" << uts.machine << ") " << uts.release << '\n' << std::endl;
+#endif
 }
