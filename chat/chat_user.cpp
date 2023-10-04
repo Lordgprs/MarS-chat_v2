@@ -5,9 +5,9 @@
 
 // construct
 ChatUser::ChatUser(const std::string& login, const std::string& password, const std::string& name)
-	: login_(login), password_(password), name_(name) {}
+	: login_{ login }, password_{ password }, name_{ name } {}
 
-//Getters
+// Getters
 const std::string& ChatUser::getLogin() const { return login_; }
 const std::string& ChatUser::getPassword() const { return password_; }
 const std::string& ChatUser::getName() const { return name_; }
