@@ -4,11 +4,21 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#if defined(__linux__)
+#include <unistd.h>
+#include <sys/utsname.h>
+#elif defined(_WIN64) or defined(_WIN32)
+#pragma comment(lib, "ntdll")
+
+extern "C" NTSTATUS __stdcall RtlGetVersion(OSVERSIONINFOEXW * lpVersionInformation);
+#endif
 
 namespace fs = std::filesystem;
 
 // construct
 ChatMgr::ChatMgr() {
+	printSystemInformation();
+
 	fs::current_path(".");
 	try {
 		loadUsers();
@@ -341,3 +351,75 @@ void ChatMgr::loadMessages() {
 	}
 	file.close();
 }
+
+void ChatMgr::printSystemInformation() const {
+#if defined(__linux__)
+	utsname uts;
+	uname(&uts);
+
+	auto pid = getpid();
+
+	std::cout << "Current process ID: " << pid << std::endl;
+	std::cout << "OS " << uts.sysname << " (" << uts.machine << ") " << uts.release << '\n' << std::endl;
+#elif defined(_WIN64) or defined(_WIN32)
+	OSVERSIONINFOEXW osv;
+	osv.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
+	if (RtlGetVersion(&osv) == 0)
+	{
+		std::cout << "OS Windows "
+			<< getLiteralOSName(osv) <<
+			' ' << osv.dwMajorVersion << "."
+			<< osv.dwMinorVersion << "."
+			<< osv.dwBuildNumber << std::endl;
+	}
+	else {
+		std::cout << "Unable to obtain Windows version" << std::endl;
+	}
+#endif
+}
+
+#if defined(_WIN64) or defined(_WIN32)
+std::string ChatMgr::getLiteralOSName(OSVERSIONINFOEX &osv) const {
+	// returns empty string if the version is unknown
+	if (osv.dwMajorVersion <= 4) {
+		return "NT";
+	}
+	else if (osv.dwMajorVersion == 5) {
+		switch (osv.dwMinorVersion) {
+		case 0:
+			return "2000";
+			break;
+		case 1:
+			return "XP";
+			break;
+		case 2:
+			return "Server 2003";
+		default:
+			return std::string{};
+			break;
+		}
+	}
+	else if (osv.dwMajorVersion == 6) {
+		switch (osv.dwMinorVersion) {
+		case 0:
+			return "Vista";
+			break;
+		case 1:
+			return "7";
+			break;
+		case 2:
+			return "8";
+			break;
+		case 3:
+			return "8.1";
+			break;
+		default:
+			return std::string{};
+			break;
+		}
+	}
+	else {
+		return std::to_string(osv.dwMajorVersion);
+	}
+}
+#endif
