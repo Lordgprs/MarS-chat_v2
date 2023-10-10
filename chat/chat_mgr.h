@@ -12,7 +12,6 @@
 
 #if defined(_WIN64) or defined(_WIN32)
 #include <Windows.h>
-
 struct WindowsVersion {
 	unsigned major, minor, build;
 };
