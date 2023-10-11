@@ -4,18 +4,19 @@ C_SRC = \
 	$(SRC_DIR)/broadcast_message.cpp \
 	$(SRC_DIR)/chat_user.cpp \
 	$(SRC_DIR)/chat_mgr.cpp \
-	$(SRC_DIR)/client.cpp \
 	$(SRC_DIR)/SHA256.cpp \
 	$(SRC_DIR)/project_lib.cpp \
-	$(SRC_DIR)/config_file.cpp
+	$(SRC_DIR)/config_file.cpp \
+	$(SRC_DIR)/client.cpp
 S_SRC = \
 	$(SRC_DIR)/private_message.cpp \
 	$(SRC_DIR)/broadcast_message.cpp \
 	$(SRC_DIR)/chat_user.cpp \
-	$(SRC_DIR)/chat_mgr.cpp \
-	$(SRC_DIR)/server.cpp \
+	$(SRC_DIR)/config_file.cpp \
+	$(SRC_DIR)/chat_server.cpp \
 	$(SRC_DIR)/SHA256.cpp \
-	$(SRC_DIR)/project_lib.cpp
+	$(SRC_DIR)/project_lib.cpp \
+	$(SRC_DIR)/server.cpp
 
 C_TARGET = bin/chat
 S_TARGET = bin/chat_server

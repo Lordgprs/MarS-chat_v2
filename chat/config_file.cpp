@@ -24,5 +24,12 @@ ConfigFile::ConfigFile(const std::string &filename) {
 		}
 	}
 	fs.close();
+	for (const auto it: options_) {
+		std::cout << it.first << ':' << it.second << std::endl;
+	}
+}
+
+const std::string &ConfigFile::operator[](const std::string &index) const {
+	return options_.at(index);
 }
 

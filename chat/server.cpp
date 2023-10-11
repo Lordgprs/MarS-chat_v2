@@ -1,9 +1,9 @@
-#include "chat_mgr.h"
+#include "chat_server.h"
 
 int main() 
 {
-	ChatMgr chat_obj;
-	chat_obj.work();
+	ChatServer chat;
+	chat.work();
 
 	return 0;
 }
