@@ -1,9 +1,8 @@
 #include "chat_server.h"
 
-int main() 
-{
+int main() {
 	ChatServer chat;
 	chat.work();
 
-	return 0;
+	return EXIT_SUCCESS;
 }

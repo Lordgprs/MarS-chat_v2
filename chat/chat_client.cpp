@@ -1,5 +1,4 @@
-#include "chat_server.h"
-#include "SHA256.h"
+#include "chat_client.h"
 #include "project_lib.h"
 
 #include <string>
@@ -17,68 +16,26 @@ extern "C" NTSTATUS __stdcall RtlGetVersion(OSVERSIONINFOEXW * lpVersionInformat
 namespace fs = std::filesystem;
 
 // construct
-ChatServer::ChatServer() {
+ChatClient::ChatClient() {
 	printSystemInformation();
-
-	fs::current_path(".");
-	try {
-		loadUsers();
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
-	}
-	try {
-		loadMessages();
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
-	}
 
 	std::cout <<
 		"Welcome to the chat,\n"
 		"to view help, type /help" << std::endl;
-
-	if(users_.empty()) {
-		return;
-	}
-
-	std::cout << "Registered users: ";
-	for (const auto kv: users_) {
-		std::cout << '\'' << kv.first << "' ";
-	}
-	std::cout << '\n' << std::endl;
-	
-	sockFd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sockFd_ == -1) {
-		throw std::runtime_error{ "Error while creating socket!" };
-	}
-
-	server_.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_.sin_port = htons(stoi(config_["ListenPort"]));
-	server_.sin_family = AF_INET;
-
-	auto bindStatus = bind(sockFd_, reinterpret_cast<sockaddr *>(&server_), sizeof(server_));
-	if (bindStatus == -1) {
-		throw std::runtime_error{ "Error: socket binding failed" };
-	}
-
-	auto connectionStatus = listen(sockFd_, BACKLOG);
-	if (connectionStatus == -1) {
-		throw std::runtime_error{ "Error: could not listen the specified TCP port" };
-	}
-	std::cout << "Server has been started and listening port TCP/" << config_["ListenPort"] << '\n' << std::endl;
+	std::cout << "Connecting to " << config_["ServerAddress"] << ':' << config_["ServerPort"] << "..." << std::endl;
 }
 
-ChatServer::~ChatServer() {
+ChatClient::~ChatClient() {
 	close(sockFd_);
 }
 
+
 // login availability
-bool ChatServer::isLoginAvailable(const std::string& login) const {
+bool ChatClient::isLoginAvailable(const std::string& login) const {
 	return users_.find(login) == users_.end();
 }
 
-void ChatServer::signUp() {
+void ChatClient::signUp() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "to register, enter /logout.\n" << std::endl;
 		return;
@@ -109,7 +66,7 @@ void ChatServer::signUp() {
 		throw std::invalid_argument("Login contains invalid characters.");
 	}
 	
-	SHA256 sha;
+	/* SHA256 sha;
 	sha.update(password);
 	uint8_t *digest = sha.digest();
 	hash = SHA256::toString(digest);
@@ -122,10 +79,10 @@ void ChatServer::signUp() {
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
 	}
-	std::cout << "User registered successfully.\n" << std::endl;
+	std::cout << "User registered successfully.\n" << std::endl; */
 }
 
-bool ChatServer::isValidLogin(const std::string& login) const {
+bool ChatClient::isValidLogin(const std::string& login) const {
 	// allowed characters, verification
 	for (const char c : login) {
 		if (!std::isalnum(c) && c != '-' && c != '_') {
@@ -135,7 +92,7 @@ bool ChatServer::isValidLogin(const std::string& login) const {
 	return true;
 }
 
-void ChatServer::signIn() {
+void ChatClient::signIn() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "For log in you must sign out first. Enter '/logout' to sign out\n" << std::endl;
 		return;
@@ -148,7 +105,7 @@ void ChatServer::signIn() {
 	std::cout << "Enter password: ";
 	getline(std::cin, password);
 
-	SHA256 sha;
+	/*SHA256 sha;
 	sha.update(password);
 	uint8_t *digest = sha.digest();
 	hash = SHA256::toString(digest);
@@ -165,10 +122,10 @@ void ChatServer::signIn() {
 
 	std::cout << "Hi! " << it->second.getName() << ", welcome to the chat!\n" << std::endl;
 
-	loggedUser_ = &it->second;
+	loggedUser_ = &it->second;*/
 }
 
-void ChatServer::signOut() {
+void ChatClient::signOut() {
 	if (loggedUser_ == nullptr) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
@@ -177,7 +134,7 @@ void ChatServer::signOut() {
 	loggedUser_ = nullptr;
 }
 
-void ChatServer::removeUser(ChatUser& user) {
+void ChatClient::removeUser(ChatUser& user) {
 	if (loggedUser_ == nullptr) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
@@ -188,7 +145,7 @@ void ChatServer::removeUser(ChatUser& user) {
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
-void ChatServer::sendMessage(const std::string& message) {
+void ChatClient::sendMessage(const std::string& message) {
 	if (message.empty()) {
 		// invalid argument passed
 		throw std::invalid_argument("Message cannot be empty");
@@ -207,61 +164,59 @@ void ChatServer::sendMessage(const std::string& message) {
 	}
 }
 
-void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
+void ChatClient::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
 	if (users_.find(receiverName) == users_.end()) {
 		throw std::invalid_argument("User @" + receiverName + " does not exist");
 	}
 	messages_.emplace_back(std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText));
 }
 
-void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
+void ChatClient::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
 	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
 }
 
-void ChatServer::work() {
-	std::string inputText;
-	socklen_t length = sizeof(client_);
-	auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+void ChatClient::work() {
+	// stores user input
+	std::string input_text;
+
 	while (true) {
 		try {
-			// working out the program algorithm
-			bzero(message_, MESSAGE_LENGTH);
+			// working out the program algor5ithm
 			std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
-			read(connection, message_, MESSAGE_LENGTH);
+			getline(std::cin, input_text);
 
-			std::cout << "Received message: " << message_ << std::endl;
-			if (strncmp(message_, "/help", 5) == 0) {
+			if (input_text == "/help") {
 				// output help
 				Chat::displayHelp();
 			}
-			else if (strncmp(message_, "/signup", 7) == 0) {
+			else if (input_text == "/signup") {
 				// registration
 				signUp();
 			}
-			else if (strncmp(message_, "/signin", 7) == 0) {
+			else if (input_text == "/signin") {
 				// authorization
 				signIn();
 			}
-			else if (strncmp(message_, "/logout", 7) == 0) {
+			else if (input_text == "/logout") {
 				// logout
 				signOut();
 			}
-			else if (strncmp(message_, "/remove", 7) == 0) {
+			else if (input_text == "/remove") {
 				// removing current user
 				if (loggedUser_) {
 					removeUser(*loggedUser_);
 				}
 			}
 			else if (
-				strncmp(message_, "/exit", 5) == 0 ||
-				strncmp(message_, "/quit", 5) == 0) {
+				input_text == "/exit" ||
+				input_text == "/quit") {
 				// closing the program
 				break;
 			}
 			else if (loggedUser_ != nullptr) {
 				// if there is an authorized user, we send a message
-				sendMessage(inputText);
+				sendMessage(input_text);
 			}
 			else {
 				std::cout << 
@@ -295,13 +250,13 @@ void ChatServer::work() {
 	}
 }
 
-void ChatServer::checkUnreadMessages() {
+void ChatClient::checkUnreadMessages() {
 	for (int i = 0; i < messages_.size(); ++i) {
 		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
 	}
 }
 
-void ChatServer::saveUsers() const {
+void ChatClient::saveUsers() const {
 	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
 	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
@@ -314,7 +269,7 @@ void ChatServer::saveUsers() const {
 	}
 }
 
-void ChatServer::saveMessages() const {	
+void ChatClient::saveMessages() const {	
 	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
 	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
@@ -327,7 +282,7 @@ void ChatServer::saveMessages() const {
 	}
 }
 
-void ChatServer::loadUsers() {
+void ChatClient::loadUsers() {
 	std::ifstream file(USER_CONFIG, std::ios::in);
 	if (!file.is_open()) {
 		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
@@ -347,7 +302,7 @@ void ChatServer::loadUsers() {
 	file.close();
 }
 
-void ChatServer::loadMessages() {
+void ChatClient::loadMessages() {
 	std::ifstream file(MESSAGES_LOG, std::ios::in);
 	if (!file.is_open()) {
 		throw std::runtime_error{ "Error: cannot open file " + MESSAGES_LOG + " for read" };
@@ -383,7 +338,7 @@ void ChatServer::loadMessages() {
 	file.close();
 }
 
-void ChatServer::printSystemInformation() const {
+void ChatClient::printSystemInformation() const {
 #if defined(__linux__)
 	utsname uts;
 	uname(&uts);
@@ -410,7 +365,7 @@ void ChatServer::printSystemInformation() const {
 }
 
 #if defined(_WIN64) or defined(_WIN32)
-std::string ChatServer::getLiteralOSName(OSVERSIONINFOEX &osv) const {
+std::string ChatClient::getLiteralOSName(OSVERSIONINFOEX &osv) const {
 	// returns empty string if the version is unknown
 	if (osv.dwMajorVersion <= 4) {
 		return "NT";

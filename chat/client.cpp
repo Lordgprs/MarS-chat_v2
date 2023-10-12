@@ -1,9 +1,8 @@
-#include "chat_mgr.h"
+#include "chat_client.h"
 
-int main() 
-{
-	ChatMgr chat_obj;
-	chat_obj.work();
+int main() {
+	ChatClient chat;
+	chat.work();
 
-	return 0;
+	return EXIT_SUCCESS;
 }
