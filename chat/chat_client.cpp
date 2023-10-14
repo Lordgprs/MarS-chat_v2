@@ -23,6 +23,21 @@ ChatClient::ChatClient() {
 		"Welcome to the chat,\n"
 		"to view help, type /help" << std::endl;
 	std::cout << "Connecting to " << config_["ServerAddress"] << ':' << config_["ServerPort"] << "..." << std::endl;
+
+	server_.sin_addr.s_addr = inet_addr(config_["ServerAddress"].c_str());
+	server_.sin_port = htons(stoi(config_["ServerPort"]));
+	server_.sin_family = AF_INET;
+
+	sockFd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockFd_ == -1) {
+		throw std::runtime_error{ "Error while creating socket" };
+	}
+
+	auto connection = connect(sockFd_, reinterpret_cast<sockaddr *>(&server_), sizeof(server_));
+	if (connection == -1) {
+		throw std::runtime_error{ "Could not connect to server..." };
+	}
+
 }
 
 ChatClient::~ChatClient() {
@@ -104,25 +119,9 @@ void ChatClient::signIn() {
 	getline(std::cin, login);
 	std::cout << "Enter password: ";
 	getline(std::cin, password);
-
-	/*SHA256 sha;
-	sha.update(password);
-	uint8_t *digest = sha.digest();
-	hash = SHA256::toString(digest);
-	delete[] digest;
-
-
-	auto it = users_.find(login);
-	if (it == users_.end() || 
-		it->second.getLogin() != login || 
-		it->second.getPassword() != hash) {
-		// invalid argument passed
-		throw std::invalid_argument("Invalid login or password!");
-	}
-
-	std::cout << "Hi! " << it->second.getName() << ", welcome to the chat!\n" << std::endl;
-
-	loggedUser_ = &it->second;*/
+	std::string cmd{ std::string{"/signin:"} + login + ":" + password };
+	strcpy(message_, cmd.c_str());
+	sendMessage();
 }
 
 void ChatClient::signOut() {
@@ -145,23 +144,14 @@ void ChatClient::removeUser(ChatUser& user) {
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
-void ChatClient::sendMessage(const std::string& message) {
-	if (message.empty()) {
+ssize_t ChatClient::sendMessage() const {
+	if (*message_ == '\0') {
 		// invalid argument passed
 		throw std::invalid_argument("Message cannot be empty");
 	}
+	ssize_t bytes = write(sockFd_, message_, MESSAGE_LENGTH);
 
-	if (message[0] == '@') {
-		size_t pos = message.find(' ');
-		if (pos != std::string::npos) {
-			std::string receiverName = message.substr(1, pos - 1);
-			std::string messageText = message.substr(pos + 1);
-			sendPrivateMessage(*loggedUser_, receiverName, messageText);
-		}
-	}
-	else {
-		sendBroadcastMessage(*loggedUser_, message);
-	}
+	return bytes;
 }
 
 void ChatClient::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
@@ -177,46 +167,44 @@ void ChatClient::sendBroadcastMessage(ChatUser& sender, const std::string& messa
 }
 
 void ChatClient::work() {
-	// stores user input
-	std::string input_text;
-
 	while (true) {
 		try {
-			// working out the program algor5ithm
+			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 			std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
-			getline(std::cin, input_text);
+			std::cin.getline(message_, MESSAGE_LENGTH);
+			
+			// working out the program algor5ithm
 
-			if (input_text == "/help") {
+			if (strncmp(message_, "/help", 5) == 0) {
 				// output help
 				Chat::displayHelp();
 			}
-			else if (input_text == "/signup") {
+			else if (strncmp(message_, "/signup", 7) == 0) {
 				// registration
 				signUp();
 			}
-			else if (input_text == "/signin") {
+			else if (strncmp(message_, "/signin", 7) == 0) {
 				// authorization
 				signIn();
 			}
-			else if (input_text == "/logout") {
+			else if (strncmp(message_, "/logout", 7) == 0) {
 				// logout
 				signOut();
 			}
-			else if (input_text == "/remove") {
+			else if (strncmp(message_, "/remove", 7) == 0) {
 				// removing current user
 				if (loggedUser_) {
 					removeUser(*loggedUser_);
 				}
 			}
+			else if (loggedUser_) {
+				sendMessage();
+			}
 			else if (
-				input_text == "/exit" ||
-				input_text == "/quit") {
+				strncmp(message_, "/exit", 5) == 0 ||
+				strncmp(message_, "/quit", 5) == 0) {
 				// closing the program
 				break;
-			}
-			else if (loggedUser_ != nullptr) {
-				// if there is an authorized user, we send a message
-				sendMessage(input_text);
 			}
 			else {
 				std::cout << 
@@ -232,21 +220,6 @@ void ChatClient::work() {
 			// exception handling
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
-	}
-
-	if (usersFileMustBeUpdated_) {
-		try {
-			saveUsers();
-		}
-		catch (const std::runtime_error &e) {
-			std::cerr << e.what() << std::endl;
-		}
-	}
-	try {
-		saveMessages();
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
 	}
 }
 

@@ -5,9 +5,9 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
-#include <stdexcept>
 #if defined(__linux__)
 #include <sys/utsname.h>
+#include <errno.h>
 #elif defined(_WIN64) or defined(_WIN32)
 #pragma comment(lib, "ntdll")
 
@@ -53,13 +53,18 @@ ChatServer::ChatServer() {
 		throw std::runtime_error{ "Error while creating socket!" };
 	}
 
+	int trueVal = 1;
+	if (setsockopt(sockFd_, SOL_SOCKET, SO_REUSEADDR, &trueVal, sizeof(trueVal)) == -1) {
+		throw std::runtime_error{ std::string{ "Can not set socket options: " } + std::string{ strerror(errno) } };	
+	}
+
 	server_.sin_addr.s_addr = htonl(INADDR_ANY);
 	server_.sin_port = htons(stoi(config_["ListenPort"]));
 	server_.sin_family = AF_INET;
 
 	auto bindStatus = bind(sockFd_, reinterpret_cast<sockaddr *>(&server_), sizeof(server_));
 	if (bindStatus == -1) {
-		throw std::runtime_error{ "Error: socket binding failed" };
+		throw std::runtime_error{ std::string{ "Can not bind socket: " } + std::string{ strerror(errno) } };
 	}
 
 	auto connectionStatus = listen(sockFd_, BACKLOG);
@@ -142,11 +147,10 @@ void ChatServer::signIn() {
 	}
 
 	std::string login, password, hash;
-
-	std::cout << "Enter login: ";
-	getline(std::cin, login);
-	std::cout << "Enter password: ";
-	getline(std::cin, password);
+	
+	auto tokens = Chat::split(message_, ":");
+	login = tokens[1];
+	password = tokens[2];
 
 	SHA256 sha;
 	sha.update(password);
@@ -154,18 +158,17 @@ void ChatServer::signIn() {
 	hash = SHA256::toString(digest);
 	delete[] digest;
 
-
 	auto it = users_.find(login);
 	if (it == users_.end() || 
 		it->second.getLogin() != login || 
 		it->second.getPassword() != hash) {
 		// invalid argument passed
-		throw std::invalid_argument("Invalid login or password!");
+		std::cout << "Login failed for user '" << login << " from " << inet_ntoa(client_.sin_addr) << std::endl;
 	}
-
-	std::cout << "Hi! " << it->second.getName() << ", welcome to the chat!\n" << std::endl;
-
-	loggedUser_ = &it->second;
+	else {
+		it->second.login();
+		std::cout << "User " << it->second.getName() << "successfully logged in" << std::endl;
+	}
 }
 
 void ChatServer::signOut() {
@@ -223,10 +226,13 @@ void ChatServer::work() {
 	std::string inputText;
 	socklen_t length = sizeof(client_);
 	auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+	std::cout << "Client connected from " <<
+		inet_ntoa(client_.sin_addr) <<
+		':' << ntohs(client_.sin_port) << '\n' << std::endl;
 	while (true) {
 		try {
 			// working out the program algorithm
-			bzero(message_, MESSAGE_LENGTH);
+			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 			std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
 			read(connection, message_, MESSAGE_LENGTH);
 

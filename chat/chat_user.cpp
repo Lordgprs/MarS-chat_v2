@@ -25,3 +25,14 @@ void ChatUser::save(const std::string &filename) const {
 	file.close();
 }
 
+void ChatUser::login() {
+	isLoggedIn_ = false;
+}
+
+void ChatUser::logout() {
+	isLoggedIn_ = false;
+}
+
+bool ChatUser::isLoggedIn() const {
+	return isLoggedIn_;
+}

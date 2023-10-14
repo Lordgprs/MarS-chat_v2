@@ -11,6 +11,8 @@
 #include <map>
 #include <memory>
 #include <cstring>
+#include <algorithm>
+#include <stdexcept>
 
 #if defined(_WIN64) or defined(_WIN32)
 #include <Windows.h>
@@ -21,6 +23,7 @@ struct WindowsVersion {
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 
 class ChatServer final {

@@ -5,11 +5,14 @@
 #include "private_message.h"
 #include "config_file.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
+#include <algorithm>
 
 #if defined(_WIN64) or defined(_WIN32)
 #include <Windows.h>
@@ -20,6 +23,7 @@ struct WindowsVersion {
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 
 class ChatClient final {
@@ -35,7 +39,7 @@ private:
 	void signIn(); // authorization
 	void signOut(); // user logout
 	void removeUser(ChatUser& user); // deleting a user
-	void sendMessage(const std::string& message); // sending a message
+	ssize_t sendMessage() const; // sending a message
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
 	void checkUnreadMessages(); // check unread messags
@@ -60,7 +64,6 @@ private:
 	bool usersFileMustBeUpdated_ { false };
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
-	sockaddr_in client_;
 	int sockFd_;
 	char message_[MESSAGE_LENGTH];
 };
