@@ -16,8 +16,9 @@ extern "C" NTSTATUS __stdcall RtlGetVersion(OSVERSIONINFOEXW * lpVersionInformat
 
 namespace fs = std::filesystem;
 
-// construct
+// constructor
 ChatServer::ChatServer() {
+	mainPid_ = getpid();
 	printSystemInformation();
 
 	fs::current_path(".");
@@ -35,8 +36,9 @@ ChatServer::ChatServer() {
 	}
 
 	std::cout <<
-		"Welcome to the chat,\n"
-		"to view help, type /help" << std::endl;
+		"Welcome to the chat admin console. "
+		"This chat server supports multiple client login and creates own process for each one.\n"
+		"Type /help to view help" << std::endl;
 
 	if(users_.empty()) {
 		return;
@@ -71,11 +73,16 @@ ChatServer::ChatServer() {
 	if (connectionStatus == -1) {
 		throw std::runtime_error{ "Error: could not listen the specified TCP port" };
 	}
-	std::cout << "Server has been started and listening port TCP/" << config_["ListenPort"] << '\n' << std::endl;
+	std::cout << "Server has been started and listening port TCP/" << config_["ListenPort"] << '\n';
+	printPrompt();
 }
 
+// destructor
 ChatServer::~ChatServer() {
 	close(sockFd_);
+	if(mainPid_ == getpid()) {
+		wait(nullptr);
+	}
 }
 
 // login availability
@@ -163,11 +170,15 @@ void ChatServer::signIn() {
 		it->second.getLogin() != login || 
 		it->second.getPassword() != hash) {
 		// invalid argument passed
-		std::cout << "Login failed for user '" << login << " from " << inet_ntoa(client_.sin_addr) << std::endl;
+		clearPrompt();
+		std::cout << "Login failed for user '" << login << "' from " << inet_ntoa(client_.sin_addr) << std::endl;
+		printPrompt();
 	}
 	else {
 		it->second.login();
-		std::cout << "User " << it->second.getName() << "successfully logged in" << std::endl;
+		clearPrompt();
+		std::cout << "User " << it->second.getName() << " successfully logged in" << std::endl;
+		printPrompt();
 	}
 }
 
@@ -223,82 +234,108 @@ void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& messa
 }
 
 void ChatServer::work() {
-	std::string inputText;
 	socklen_t length = sizeof(client_);
-	auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
-	std::cout << "Client connected from " <<
-		inet_ntoa(client_.sin_addr) <<
-		':' << ntohs(client_.sin_port) << '\n' << std::endl;
-	while (true) {
-		try {
-			// working out the program algorithm
-			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
-			std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
-			read(connection, message_, MESSAGE_LENGTH);
+	while (mainLoopActive_) {
+		socklen_t length = sizeof(client_);
+		auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+		int child = fork();
+		if (child == 0) {
+			processNewClient(connection);
+		}
+	}
+}
 
-			std::cout << "Received message: " << message_ << std::endl;
-			if (strncmp(message_, "/help", 5) == 0) {
-				// output help
-				Chat::displayHelp();
-			}
-			else if (strncmp(message_, "/signup", 7) == 0) {
-				// registration
-				signUp();
-			}
-			else if (strncmp(message_, "/signin", 7) == 0) {
-				// authorization
-				signIn();
-			}
-			else if (strncmp(message_, "/logout", 7) == 0) {
-				// logout
-				signOut();
-			}
-			else if (strncmp(message_, "/remove", 7) == 0) {
-				// removing current user
-				if (loggedUser_) {
-					removeUser(*loggedUser_);
+void ChatServer::processNewClient(int connection) {
+			clearPrompt();
+			std::cout << "Client connected from " <<
+				inet_ntoa(client_.sin_addr) <<
+				':' << ntohs(client_.sin_port) << std::endl;
+			printPrompt();
+			while (true) {
+				try {
+					std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
+					auto bytes = read(connection, message_, MESSAGE_LENGTH);
+					if (bytes == -1) {
+						throw std::runtime_error{
+							std::string{ "Error while reading from socket: " } + 
+							std::string{ strerror(errno) } 
+						};
+					}
+					if (bytes == 0) {
+						clearPrompt();
+						std::cout << "Client with address " << 
+							inet_ntoa(client_.sin_addr) << 
+							':' << ntohs(client_.sin_port) << 
+							" has been disconnected\n" << std::endl;
+						break;
+						printPrompt();
+					}
+
+					clearPrompt();
+					std::cout << "Received " << bytes << " bytes: " << message_ << std::endl;
+					printPrompt();
+					if (strncmp(message_, "/help", 5) == 0) {
+						// output help
+						Chat::displayHelp();
+					}
+					else if (strncmp(message_, "/signup", 7) == 0) {
+						// registration
+						signUp();
+					}
+					else if (strncmp(message_, "/signin", 7) == 0) {
+						// authorization
+						signIn();
+					}
+					else if (strncmp(message_, "/logout", 7) == 0) {
+						// logout
+						signOut();
+					}
+					else if (strncmp(message_, "/remove", 7) == 0) {
+						// removing current user
+						if (loggedUser_) {
+							removeUser(*loggedUser_);
+						}
+					}
+					else if (
+						strncmp(message_, "/exit", 5) == 0 ||
+						strncmp(message_, "/quit", 5) == 0) {
+						// closing the program
+						break;
+					}
+					else if (loggedUser_ != nullptr) {
+						// if there is an authorized user, we send a message
+						//sendMessage(inputText);
+					}
+					else {
+						std::cout << 
+							"the command is not recognized, \n"
+							"to output help, type /help\n" 
+						<< std::endl;
+					}
+					if (loggedUser_ != nullptr) {
+						checkUnreadMessages();
+					}
+				}
+				catch (std::invalid_argument e) {
+					// exception handling
+					std::cout << "Error: " << e.what() << "\n" << std::endl;
 				}
 			}
-			else if (
-				strncmp(message_, "/exit", 5) == 0 ||
-				strncmp(message_, "/quit", 5) == 0) {
-				// closing the program
-				break;
-			}
-			else if (loggedUser_ != nullptr) {
-				// if there is an authorized user, we send a message
-				sendMessage(inputText);
-			}
-			else {
-				std::cout << 
-					"the command is not recognized, \n"
-					"to output help, type /help\n" 
-				<< std::endl;
-			}
-			if (loggedUser_ != nullptr) {
-				checkUnreadMessages();
-			}
-		}
-		catch (std::invalid_argument e) {
-			// exception handling
-			std::cout << "Error: " << e.what() << "\n" << std::endl;
-		}
-	}
 
-	if (usersFileMustBeUpdated_) {
-		try {
-			saveUsers();
-		}
-		catch (const std::runtime_error &e) {
-			std::cerr << e.what() << std::endl;
-		}
-	}
-	try {
-		saveMessages();
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
-	}
+			if (usersFileMustBeUpdated_) {
+				try {
+					saveUsers();
+				}
+				catch (const std::runtime_error &e) {
+					std::cerr << e.what() << std::endl;
+				}
+			}
+			/* try {
+				saveMessages();
+			}
+			catch (const std::runtime_error &e) {
+				std::cerr << e.what() << std::endl;
+			} */
 }
 
 void ChatServer::checkUnreadMessages() {
@@ -389,14 +426,31 @@ void ChatServer::loadMessages() {
 	file.close();
 }
 
+void ChatServer::printPrompt() const {
+	std::cout << PROMPT << ' ';
+	std::cout.flush();
+}
+
+unsigned int ChatServer::getPromptLength() const {
+	// Prompt length including trailing whitespace
+	return PROMPT.length() + 1;
+}
+
+void ChatServer::clearPrompt() const {
+	auto length = getPromptLength();
+	for (unsigned i = 0; i < length; ++i) {
+		// Print backspace
+		std::cout << '\b';
+	}
+	std::cout.flush();
+}
+
 void ChatServer::printSystemInformation() const {
 #if defined(__linux__)
 	utsname uts;
 	uname(&uts);
 
-	auto pid = getpid();
-
-	std::cout << "Current process ID: " << pid << std::endl;
+	std::cout << "Current process ID: " << mainPid_ << std::endl;
 	std::cout << "OS " << uts.sysname << " (" << uts.machine << ") " << uts.release << '\n' << std::endl;
 #elif defined(_WIN64) or defined(_WIN32)
 	OSVERSIONINFOEXW osv;

@@ -22,6 +22,8 @@ struct WindowsVersion {
 #elif defined(__linux__)
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #endif
@@ -32,8 +34,7 @@ public:
 	~ChatServer(); // destructor
 	void work(); // main work
 
-private:
-	
+private:	
 	bool isLoginAvailable(const std::string& login) const; // login availability
 	void signUp(); // registration
 	bool isValidLogin(const std::string& login) const; // login verification
@@ -49,11 +50,16 @@ private:
 	void loadUsers(); // load user list from file
 	void loadMessages(); // load message list from file
 	void printSystemInformation() const; // print information about process and OS
+	void printPrompt() const;
+	unsigned int getPromptLength() const;
+	void clearPrompt() const;
+	void processNewClient(int connection);
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };
 	const std::string MESSAGES_LOG{ "messages.log" };
-	const std::string CONFIG_FILE { "server.cfg" };
+	const std::string CONFIG_FILE{ "server.cfg" };
+	const std::string PROMPT{ "server>" };
 	const int BACKLOG{ 5 };
 
 #if defined(_WIN64) or defined(_WIN32)
@@ -68,5 +74,8 @@ private:
 	sockaddr_in server_;
 	sockaddr_in client_;
 	int sockFd_;
+	int mainPid_;
+	int consolePid_;
 	char message_[MESSAGE_LENGTH];
+	bool mainLoopActive_{ true };
 };
