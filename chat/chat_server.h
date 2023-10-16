@@ -54,6 +54,7 @@ private:
 	unsigned int getPromptLength() const;
 	void clearPrompt() const;
 	void processNewClient(int connection);
+	void startConsole() const;
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };

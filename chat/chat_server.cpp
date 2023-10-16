@@ -235,14 +235,27 @@ void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& messa
 
 void ChatServer::work() {
 	socklen_t length = sizeof(client_);
-	while (mainLoopActive_) {
-		socklen_t length = sizeof(client_);
-		auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
-		int child = fork();
-		if (child == 0) {
-			processNewClient(connection);
+	int consolePid = fork();
+	if (consolePid == 0) {
+		startConsole();
+	}
+	else {
+		// Clearing zombie processes automatically
+		signal(SIGCHLD, SIG_IGN);
+
+		while (mainLoopActive_) {
+			socklen_t length = sizeof(client_);
+			auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+			int clientPid = fork();
+			if (clientPid == 0) {
+				processNewClient(connection);
+			}
 		}
 	}
+}
+
+void ChatServer::startConsole() const {
+
 }
 
 void ChatServer::processNewClient(int connection) {
