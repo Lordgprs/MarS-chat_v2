@@ -2,6 +2,7 @@
 #include "SHA256.h"
 #include "project_lib.h"
 
+#include <functional>
 #include <string>
 #include <fstream>
 #include <filesystem>
@@ -235,14 +236,11 @@ void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& messa
 
 void ChatServer::work() {
 	socklen_t length = sizeof(client_);
-	int consolePid = fork();
-	if (consolePid == 0) {
+	consolePid_ = fork();
+	if (consolePid_ == 0) {
 		startConsole();
 	}
 	else {
-		// Clearing zombie processes automatically
-		signal(SIGCHLD, SIG_IGN);
-
 		while (mainLoopActive_) {
 			socklen_t length = sizeof(client_);
 			auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
@@ -250,15 +248,62 @@ void ChatServer::work() {
 			if (clientPid == 0) {
 				processNewClient(connection);
 			}
+			else {
+
+			}
 		}
 	}
 }
 
 void ChatServer::startConsole() const {
+	std::string cmd;
+	while(mainLoopActive_) {
+		getline(std::cin, cmd);
+		if (cmd == "/quit" || cmd == "/exit") {
+			break;
+		}
+		if (mainLoopActive_) {
+			printPrompt();
+		}
+	}
+}
 
+void ChatServer::childDeathHandler(int signum) {
+	pid_t pid;
+	while ((pid = waitpid(-1, nullptr, WNOHANG)) > 0) {
+		if (pid == consolePid_) {
+			clearPrompt();
+			std::cout << "\nServer exiting..." << std::endl;
+			mainLoopActive_ = false;
+			close(sockFd_);
+		}
+	}
+}
+
+void ChatServer::sigIntHandler(int signum) {
+	mainLoopActive_ = false;
+	if (mainPid_ != getpid()) {
+		return;
+	}
+	clearPrompt();
+	std::cout << "\nCaught interrupt signal. Server exiting..." << std::endl;
+	close(sockFd_);
+}
+
+void ChatServer::sigTermHandler(int signum) {
+	mainLoopActive_ = false;
+	if (mainPid_ != getpid()) {
+		return;
+	}
+	clearPrompt();
+	std::cout << "\nCaught terminate signal. Server exiting..." << std::endl;
+	close(sockFd_);
 }
 
 void ChatServer::processNewClient(int connection) {
+	if (!mainLoopActive_) {
+		return;
+	}
 			clearPrompt();
 			std::cout << "Client connected from " <<
 				inet_ntoa(client_.sin_addr) <<
@@ -269,6 +314,9 @@ void ChatServer::processNewClient(int connection) {
 					std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 					auto bytes = read(connection, message_, MESSAGE_LENGTH);
 					if (bytes == -1) {
+						if (!mainLoopActive_) {
+							break;
+						}
 						throw std::runtime_error{
 							std::string{ "Error while reading from socket: " } + 
 							std::string{ strerror(errno) } 

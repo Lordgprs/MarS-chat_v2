@@ -33,6 +33,9 @@ public:
 	ChatServer(); // constructor
 	~ChatServer(); // destructor
 	void work(); // main work
+	void childDeathHandler(int signum);
+	void sigIntHandler(int signum);
+	void sigTermHandler(int signum);
 
 private:	
 	bool isLoginAvailable(const std::string& login) const; // login availability
@@ -75,8 +78,8 @@ private:
 	sockaddr_in server_;
 	sockaddr_in client_;
 	int sockFd_;
-	int mainPid_;
-	int consolePid_;
+	pid_t mainPid_;
+	pid_t consolePid_;
 	char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
 };
