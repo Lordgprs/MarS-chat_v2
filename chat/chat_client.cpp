@@ -44,19 +44,26 @@ ChatClient::~ChatClient() {
 	close(sockFd_);
 }
 
-
 // login availability
 bool ChatClient::isLoginAvailable(const std::string& login) const {
-	return users_.find(login) == users_.end();
+	strcpy(message_, "/checklogin:");
+	strcat(message_, login.c_str());
+	sendMessage();
+	receiveResponse();
+	if (strcmp(message_, "/response:busy") == 0) {
+		return false;
+	}
+
+	return true;
 }
 
 void ChatClient::signUp() {
 	if (loggedUser_ != nullptr) {
-		std::cout << "to register, enter /logout.\n" << std::endl;
+		std::cout << "To register a new account, enter /logout first.\n" << std::endl;
 		return;
 	}
 
-	std::string name, login, password, hash;
+	std::string name, login, password;
 
 	std::cout << "Enter login: ";
 	std::getline(std::cin, login);
@@ -68,7 +75,7 @@ void ChatClient::signUp() {
 	std::getline(std::cin, name);
 
 	if (!isLoginAvailable(login)) {
-		throw std::invalid_argument("The login you entered has been already registered.");
+		throw std::invalid_argument("You can not use this login for yout registration");
 	}
 
 	if (login.empty() || password.empty()) {
@@ -81,20 +88,14 @@ void ChatClient::signUp() {
 		throw std::invalid_argument("Login contains invalid characters.");
 	}
 	
-	/* SHA256 sha;
-	sha.update(password);
-	uint8_t *digest = sha.digest();
-	hash = SHA256::toString(digest);
-	delete[] digest;
-
-	users_.emplace(login, ChatUser(login, hash, name));
-	try {
-		users_.at(login).save(USER_CONFIG);
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
-	}
-	std::cout << "User registered successfully.\n" << std::endl; */
+	strcpy(message_, "/signup:");
+	strcat(message_, login.c_str());
+	strcat(message_, ":");
+	strcat(message_, password.c_str());
+	strcat(message_, ":");
+	strcat(message_, name.c_str());
+	sendMessage();
+	receiveResponse();
 }
 
 bool ChatClient::isValidLogin(const std::string& login) const {
@@ -120,8 +121,23 @@ void ChatClient::signIn() {
 	std::cout << "Enter password: ";
 	getline(std::cin, password);
 	std::string cmd{ std::string{"/signin:"} + login + ":" + password };
+	std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 	strcpy(message_, cmd.c_str());
 	sendMessage();
+	std::cout << "Receiving response: " << std::endl;
+	receiveResponse();
+	if (strncmp(message_, "/response:success", 17) == 0) {
+		std::cout << "Login successful" << std::endl;
+		auto tokens = Chat::split(std::string{ message_ }, ":");
+		std::string name;
+		if (tokens.size() >= 3) {
+			name = tokens[2];
+		}
+		loggedUser_ = make_shared<ChatUser>(login, password, name);
+	}
+	else {
+		std::cout << "Login failed" << std::endl;
+	}
 }
 
 void ChatClient::signOut() {
@@ -139,8 +155,6 @@ void ChatClient::removeUser(ChatUser& user) {
 		return;
 	}
 	signOut();
-	users_.erase(user.getLogin());
-	usersFileMustBeUpdated_ = true;
 	std::cout << "User removed successfully\n" << std::endl;
 }
 
@@ -154,16 +168,10 @@ ssize_t ChatClient::sendMessage() const {
 	return bytes;
 }
 
-void ChatClient::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
-	if (users_.find(receiverName) == users_.end()) {
-		throw std::invalid_argument("User @" + receiverName + " does not exist");
-	}
-	messages_.emplace_back(std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText));
-}
-
-void ChatClient::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
-	// Dynamically allocate memory for new message
-	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
+ssize_t ChatClient::receiveResponse() const {
+	ssize_t bytes = read(sockFd_, message_, MESSAGE_LENGTH);
+	std::cout << "Received response: " << message_ << std::endl;
+	return bytes;
 }
 
 void ChatClient::work() {
@@ -212,103 +220,12 @@ void ChatClient::work() {
 					"to output help, type /help\n" 
 				<< std::endl;
 			}
-			if (loggedUser_ != nullptr) {
-				checkUnreadMessages();
-			}
 		}
 		catch (std::invalid_argument e) {
 			// exception handling
 			std::cout << "Error: " << e.what() << "\n" << std::endl;
 		}
 	}
-}
-
-void ChatClient::checkUnreadMessages() {
-	for (int i = 0; i < messages_.size(); ++i) {
-		messages_[i]->printIfUnreadByUser(loggedUser_->getLogin());
-	}
-}
-
-void ChatClient::saveUsers() const {
-	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
-	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
-	}
-	file.close();
-
-	for (auto it = users_.begin(); it != users_.end(); ++it) {
-		it->second.save(USER_CONFIG);		
-	}
-}
-
-void ChatClient::saveMessages() const {	
-	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
-	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + MESSAGES_LOG + " for write" };
-	}
-	file.close();
-
-	for (const auto &msg: messages_) {
-		msg->save(MESSAGES_LOG);		
-	}
-}
-
-void ChatClient::loadUsers() {
-	std::ifstream file(USER_CONFIG, std::ios::in);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
-	}
-
-	while (!file.eof()) {
-		std::string login;
-		std::string password;
-		std::string name;
-		getline(file, login);
-		getline(file, password);
-		getline(file, name);
-		if (!login.empty()) {
-			users_.emplace(login, ChatUser(login, password, name));
-		}
-	}
-	file.close();
-}
-
-void ChatClient::loadMessages() {
-	std::ifstream file(MESSAGES_LOG, std::ios::in);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Error: cannot open file " + MESSAGES_LOG + " for read" };
-	}
-	while (!file.eof()) {
-		std::string message_type;
-		std::string sender;
-		std::string text;
-
-		getline(file, message_type);
-		getline(file, sender);
-		if (message_type == "BROADCAST") {
-			std::string users_unread_str;
-			
-			getline(file, users_unread_str);
-			getline(file, text);
-
-			messages_.emplace_back(std::make_shared<BroadcastMessage>(sender, text, users_, users_unread_str));
-		}
-		else if (message_type == "PRIVATE") {
-			std::string receiver;
-			std::string is_read_str;
-			bool is_read;
-
-			getline(file, receiver);
-			getline(file, is_read_str);
-			is_read = (is_read_str == "READ");
-			getline(file, text);
-
-			messages_.emplace_back(std::make_shared<PrivateMessage>(sender, receiver, text, is_read));
-		}
-	}
-	file.close();
 }
 
 void ChatClient::printSystemInformation() const {

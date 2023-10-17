@@ -40,13 +40,9 @@ private:
 	void signOut(); // user logout
 	void removeUser(ChatUser& user); // deleting a user
 	ssize_t sendMessage() const; // sending a message
+	ssize_t receiveResponse() const; // receiving a response
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
-	void checkUnreadMessages(); // check unread messags
-	void saveUsers() const; // save all users (i. e. after removing some of them) to file
-	void saveMessages() const; // save all messages to file
-	void loadUsers(); // load user list from file
-	void loadMessages(); // load message list from file
 	void printSystemInformation() const; // print information about process and OS
 	
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
@@ -58,12 +54,9 @@ private:
 	std::string getLiteralOSName(OSVERSIONINFOEX &osv) const; // Get literal version, i.e. 5.0 is Windows 2000
 #endif
 
-	std::map<std::string, ChatUser> users_;
-	std::vector<std::shared_ptr<ChatMessage>> messages_;
-	ChatUser *loggedUser_{ nullptr };
-	bool usersFileMustBeUpdated_ { false };
+	std::shared_ptr<ChatUser> loggedUser_{ nullptr };
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
 	int sockFd_;
-	char message_[MESSAGE_LENGTH];
+	mutable char message_[MESSAGE_LENGTH];
 };

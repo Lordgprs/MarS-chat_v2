@@ -41,7 +41,7 @@ private:
 	bool isLoginAvailable(const std::string& login) const; // login availability
 	void signUp(); // registration
 	bool isValidLogin(const std::string& login) const; // login verification
-	void signIn(); // authorization
+	void signIn(int connection); // authorization
 	void signOut(); // user logout
 	void removeUser(ChatUser& user); // deleting a user
 	void sendMessage(const std::string& message); // sending a message
@@ -58,6 +58,7 @@ private:
 	void clearPrompt() const;
 	void processNewClient(int connection);
 	void startConsole() const;
+	void checkLogin(int connection) const;
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };
@@ -80,6 +81,6 @@ private:
 	int sockFd_;
 	pid_t mainPid_;
 	pid_t consolePid_;
-	char message_[MESSAGE_LENGTH];
+	mutable char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
 };

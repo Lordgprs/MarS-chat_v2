@@ -91,6 +91,23 @@ bool ChatServer::isLoginAvailable(const std::string& login) const {
 	return users_.find(login) == users_.end();
 }
 
+void ChatServer::checkLogin(int connection) const {
+	auto tokens = Chat::split(std::string{ message_ }, ":");
+	strcpy(message_, "/response:");
+	if (tokens.size() < 2) {
+		strcat(message_, "busy");
+	}
+	else if (!isLoginAvailable(tokens[1])) {
+		strcat(message_, "busy");
+	}
+	else {
+		strcat(message_, "available");
+	}
+	
+	auto bytes = write(connection, message_, MESSAGE_LENGTH);
+	printPrompt();
+}
+
 void ChatServer::signUp() {
 	if (loggedUser_ != nullptr) {
 		std::cout << "to register, enter /logout.\n" << std::endl;
@@ -148,7 +165,7 @@ bool ChatServer::isValidLogin(const std::string& login) const {
 	return true;
 }
 
-void ChatServer::signIn() {
+void ChatServer::signIn(int connection) {
 	if (loggedUser_ != nullptr) {
 		std::cout << "For log in you must sign out first. Enter '/logout' to sign out\n" << std::endl;
 		return;
@@ -173,12 +190,17 @@ void ChatServer::signIn() {
 		// invalid argument passed
 		clearPrompt();
 		std::cout << "Login failed for user '" << login << "' from " << inet_ntoa(client_.sin_addr) << std::endl;
+		std::string answer{ "/response:fail" };
+		std::cout << "Sending response: " << answer.c_str() << std::endl;
+		auto bytes = write(connection, answer.c_str(), answer.length() + 1);
 		printPrompt();
 	}
 	else {
 		it->second.login();
 		clearPrompt();
 		std::cout << "User " << it->second.getName() << " successfully logged in" << std::endl;
+		std::string answer{ std::string{ "/response:success:" } + it->second.getName() };
+		auto bytes = write(connection, answer.c_str(), answer.length() + 1);
 		printPrompt();
 	}
 }
@@ -304,99 +326,102 @@ void ChatServer::processNewClient(int connection) {
 	if (!mainLoopActive_) {
 		return;
 	}
+	clearPrompt();
+	std::cout << "Client connected from " <<
+		inet_ntoa(client_.sin_addr) <<
+		':' << ntohs(client_.sin_port) << std::endl;
+	printPrompt();
+	while (true) {
+		try {
+			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
+			auto bytes = read(connection, message_, MESSAGE_LENGTH);
+			if (bytes == -1) {
+				if (!mainLoopActive_) {
+					break;
+				}
+				throw std::runtime_error{
+					std::string{ "Error while reading from socket: " } + 
+					std::string{ strerror(errno) } 
+				};
+			}
+			if (bytes == 0) {
+				clearPrompt();
+				std::cout << "Client with address " << 
+					inet_ntoa(client_.sin_addr) << 
+					':' << ntohs(client_.sin_port) << 
+					" has been disconnected\n" << std::endl;
+				break;
+				printPrompt();
+			}
+
 			clearPrompt();
-			std::cout << "Client connected from " <<
-				inet_ntoa(client_.sin_addr) <<
-				':' << ntohs(client_.sin_port) << std::endl;
+			std::cout << "Received " << bytes << " bytes: " << message_ << std::endl;
 			printPrompt();
-			while (true) {
-				try {
-					std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
-					auto bytes = read(connection, message_, MESSAGE_LENGTH);
-					if (bytes == -1) {
-						if (!mainLoopActive_) {
-							break;
-						}
-						throw std::runtime_error{
-							std::string{ "Error while reading from socket: " } + 
-							std::string{ strerror(errno) } 
-						};
-					}
-					if (bytes == 0) {
-						clearPrompt();
-						std::cout << "Client with address " << 
-							inet_ntoa(client_.sin_addr) << 
-							':' << ntohs(client_.sin_port) << 
-							" has been disconnected\n" << std::endl;
-						break;
-						printPrompt();
-					}
+			if (strncmp(message_, "/help", 5) == 0) {
+				// output help
+				Chat::displayHelp();
+			}
+			else if (strncmp(message_, "/checklogin", 11) == 0) {
+				checkLogin(connection);
+			}
+			else if (strncmp(message_, "/signup", 7) == 0) {
+				// registration
+				signUp();
+			}
+			else if (strncmp(message_, "/signin", 7) == 0) {
+				// authorization
+				signIn(connection);
+			}
+			else if (strncmp(message_, "/logout", 7) == 0) {
+				// logout
+				signOut();
+			}
+			else if (strncmp(message_, "/remove", 7) == 0) {
+				// removing current user
+				if (loggedUser_) {
+					removeUser(*loggedUser_);
+				}
+			}
+			else if (
+				strncmp(message_, "/exit", 5) == 0 ||
+				strncmp(message_, "/quit", 5) == 0) {
+				// closing the program
+				break;
+			}
+			else if (loggedUser_ != nullptr) {
+				// if there is an authorized user, we send a message
+				//sendMessage(inputText);
+			}
+			else {
+				std::cout << 
+					"the command is not recognized, \n"
+					"to output help, type /help\n" 
+				<< std::endl;
+			}
+			if (loggedUser_ != nullptr) {
+				checkUnreadMessages();
+			}
+		}
+		catch (std::invalid_argument e) {
+			// exception handling
+			std::cout << "Error: " << e.what() << "\n" << std::endl;
+		}
+	}
 
-					clearPrompt();
-					std::cout << "Received " << bytes << " bytes: " << message_ << std::endl;
-					printPrompt();
-					if (strncmp(message_, "/help", 5) == 0) {
-						// output help
-						Chat::displayHelp();
-					}
-					else if (strncmp(message_, "/signup", 7) == 0) {
-						// registration
-						signUp();
-					}
-					else if (strncmp(message_, "/signin", 7) == 0) {
-						// authorization
-						signIn();
-					}
-					else if (strncmp(message_, "/logout", 7) == 0) {
-						// logout
-						signOut();
-					}
-					else if (strncmp(message_, "/remove", 7) == 0) {
-						// removing current user
-						if (loggedUser_) {
-							removeUser(*loggedUser_);
-						}
-					}
-					else if (
-						strncmp(message_, "/exit", 5) == 0 ||
-						strncmp(message_, "/quit", 5) == 0) {
-						// closing the program
-						break;
-					}
-					else if (loggedUser_ != nullptr) {
-						// if there is an authorized user, we send a message
-						//sendMessage(inputText);
-					}
-					else {
-						std::cout << 
-							"the command is not recognized, \n"
-							"to output help, type /help\n" 
-						<< std::endl;
-					}
-					if (loggedUser_ != nullptr) {
-						checkUnreadMessages();
-					}
-				}
-				catch (std::invalid_argument e) {
-					// exception handling
-					std::cout << "Error: " << e.what() << "\n" << std::endl;
-				}
-			}
-
-			if (usersFileMustBeUpdated_) {
-				try {
-					saveUsers();
-				}
-				catch (const std::runtime_error &e) {
-					std::cerr << e.what() << std::endl;
-				}
-			}
-			/* try {
-				saveMessages();
-			}
-			catch (const std::runtime_error &e) {
-				std::cerr << e.what() << std::endl;
-			} */
+	if (usersFileMustBeUpdated_) {
+		try {
+			saveUsers();
+		}
+		catch (const std::runtime_error &e) {
+			std::cerr << e.what() << std::endl;
+		}
+	}
+	/* try {
+		saveMessages();
+	}
+	catch (const std::runtime_error &e) {
+		std::cerr << e.what() << std::endl;
+	} */
 }
 
 void ChatServer::checkUnreadMessages() {
