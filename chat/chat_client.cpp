@@ -96,6 +96,9 @@ void ChatClient::signUp() {
 	strcat(message_, name.c_str());
 	sendMessage();
 	receiveResponse();
+	if (strncmp(message_, "/response:success", 17) == 0) {
+		std::cout << "User '" << login << "' registered successfully" << std::endl;
+	}
 }
 
 bool ChatClient::isValidLogin(const std::string& login) const {
@@ -146,7 +149,9 @@ void ChatClient::signOut() {
 		return;
 	}
 
-	loggedUser_ = nullptr;
+	strcpy(message_, "/logout");
+	sendMessage();
+	loggedUser_.reset();
 }
 
 void ChatClient::removeUser(ChatUser& user) {

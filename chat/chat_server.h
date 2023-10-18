@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <memory>
 #include <cstring>
 #include <algorithm>
@@ -39,11 +40,11 @@ public:
 
 private:	
 	bool isLoginAvailable(const std::string& login) const; // login availability
-	void signUp(); // registration
+	void signUp(int connection); // registration
 	bool isValidLogin(const std::string& login) const; // login verification
 	void signIn(int connection); // authorization
 	void signOut(); // user logout
-	void removeUser(ChatUser& user); // deleting a user
+	void removeUser(int connection); // deleting a user
 	void sendMessage(const std::string& message); // sending a message
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
@@ -59,12 +60,21 @@ private:
 	void processNewClient(int connection);
 	void startConsole() const;
 	void checkLogin(int connection) const;
+	void writeBuffer(const std::string &line) const;
+	void terminateChild() const;
+	void cleanExit();
+	std::string getClientIpAndPort() const;
+	void updateUserList() const;
+
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };
 	const std::string MESSAGES_LOG{ "messages.log" };
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
+	const std::string BUFFER{ "/tmp/chat_server.buf" };
+	const std::string BUFFER_LOCK{ "/tmp/chat_server.lock" };
+	const std::string USERLIST_LOCK{ "/tmp/chat_server_userlist.lock" };
 	const int BACKLOG{ 5 };
 
 #if defined(_WIN64) or defined(_WIN32)
@@ -73,7 +83,7 @@ private:
 
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
-	ChatUser *loggedUser_{ nullptr };
+	std::string loggedUser_;
 	bool usersFileMustBeUpdated_ { false };
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
@@ -81,6 +91,7 @@ private:
 	int sockFd_;
 	pid_t mainPid_;
 	pid_t consolePid_;
+	std::set<pid_t> children_;
 	mutable char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
 };

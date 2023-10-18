@@ -1,24 +1,12 @@
 #include "chat_server.h"
 
-ChatServer chat;
-
-void childDeathHandler(int signum) {
-	chat.childDeathHandler(signum);
-}
-
-void sigTermHandler(int signum) {
-	chat.sigTermHandler(signum);
-}
-
-void sigIntHandler(int signum) {
-	chat.sigIntHandler(signum);
-}
 
 int main() {
-	signal(SIGCHLD, childDeathHandler);
-	signal(SIGTERM, sigTermHandler);
-	signal(SIGINT, sigIntHandler);
 	try {
+		static ChatServer chat;
+		signal(SIGTERM, [](int signum) { chat.sigTermHandler(signum); });
+		signal(SIGCHLD, [](int signum) { chat.childDeathHandler(signum); });
+		signal(SIGINT, [](int signum) { chat.sigIntHandler(signum); });
 		chat.work();
 	}
 	catch (const std::runtime_error &e) {
