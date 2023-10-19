@@ -49,7 +49,7 @@ private:
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
 	void checkUnreadMessages(); // check unread messages
-	void saveUsers() const; // save all users (i. e. after removing some of them) to file
+	void saveUsers() const;
 	void saveMessages() const; // save all messages to file
 	void loadUsers(); // load user list from file
 	void loadMessages(); // load message list from file
@@ -64,7 +64,7 @@ private:
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
-	void updateUserList() const;
+	void removeUserFromFile(const std::string &);
 
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
@@ -72,9 +72,10 @@ private:
 	const std::string MESSAGES_LOG{ "messages.log" };
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
-	const std::string BUFFER{ "/tmp/chat_server.buf" };
-	const std::string BUFFER_LOCK{ "/tmp/chat_server.lock" };
-	const std::string USERLIST_LOCK{ "/tmp/chat_server_userlist.lock" };
+	const std::string TEMP_DIR { "/tmp/chat_server" };
+	const std::string BUFFER{ TEMP_DIR + "/buffer.tmp" };
+	const std::string BUFFER_LOCK{ TEMP_DIR + "/buffer.lock" };
+	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
 	const int BACKLOG{ 5 };
 
 #if defined(_WIN64) or defined(_WIN32)
@@ -84,7 +85,6 @@ private:
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
 	std::string loggedUser_;
-	bool usersFileMustBeUpdated_ { false };
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
 	sockaddr_in client_;

@@ -22,6 +22,15 @@ ChatServer::ChatServer() {
 	mainPid_ = getpid();
 	printSystemInformation();
 
+	if (fs::exists(TEMP_DIR)) {
+		throw std::runtime_error{
+			std::string{ "Temporary directory " } +
+			TEMP_DIR +
+			" exists. Maybe server is already running? "
+			"If server is not running, please delete temporary directory before start"
+		};
+	}
+	fs::create_directory(TEMP_DIR);
 	fs::current_path(".");
 	try {
 		loadUsers();
@@ -134,7 +143,16 @@ void ChatServer::signUp(int connection) {
 	std::cout << "User '" << tokens[1] << "' has bin registered" << std::endl;
 	printPrompt();
 	try {
+		while(fs::exists(USERLIST_LOCK)) {
+			sleep(1);
+		}
+		std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+		if (!lock.is_open()) {
+			throw std::runtime_error{ "Error: can not create userlist lock file!" };
+		}
+		lock.close();
 		users_.at(tokens[1]).save(USER_CONFIG);
+		fs::remove(USERLIST_LOCK);
 	}
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
@@ -201,20 +219,21 @@ void ChatServer::signOut() {
 }
 
 void ChatServer::removeUser(int connection) {
-	if (!users_.at(loggedUser_).isLoggedIn()) {
+	std::string removingUser{ loggedUser_ };
+	if (!users_.at(removingUser).isLoggedIn()) {
 		strcpy(message_, "/response:fail");
 		write(connection, message_, MESSAGE_LENGTH);
 		return;
 	}
 		
-	strcpy(message_, "/response:success");
+	strcpy(message_, "/response:success-test");
 	write(connection, message_, MESSAGE_LENGTH);
-	users_.erase(loggedUser_);
-	clearPrompt();
-	std::cout << "User '" << loggedUser_ << "' has been removed" << std::endl;
-	printPrompt();
 	signOut();
-	usersFileMustBeUpdated_ = true;
+	removeUserFromFile(removingUser);
+	loggedUser_.clear();
+	clearPrompt();
+	std::cout << "User '" << removingUser << "' has been removed" << std::endl;
+	printPrompt();
 }
 
 void ChatServer::sendMessage(const std::string& message) {
@@ -304,34 +323,22 @@ void ChatServer::cleanExit() {
 	for (auto child: children_) {
 		kill(child, SIGTERM);
 	}
+	sleep(2); // Waiting 2 seconds for all children will die
+	clearPrompt();
 	std::cout << "Closing socket..." << std::endl;
 	close(sockFd_);
+	std::cout << "Removing temporary directory..." << std::endl;
+	fs::remove_all(TEMP_DIR);
 	std::cout << "Exiting from main process..." << std::endl;
-	clearPrompt();
 	
 	exit(EXIT_SUCCESS);	
 }
 
 void ChatServer::terminateChild() const {
-	if (consolePid_ == getpid()) {
-		if (usersFileMustBeUpdated_) {
-			try {
-				saveUsers();
-			}
-			catch (const std::runtime_error &e) {
-				std::cerr << e.what() << std::endl;
-			}
-		}
-		/* try {
-			saveMessages();
-		}
-		catch (const std::runtime_error &e) {
-			std::cerr << e.what() << std::endl;
-		} */
-	}
 	clearPrompt();
 	std::cout << "Exiting from child " << getpid() << "..." << std::endl;
 	printPrompt();
+
 	exit(EXIT_SUCCESS);
 }
 
@@ -455,19 +462,6 @@ void ChatServer::checkUnreadMessages() {
 	}
 }
 
-void ChatServer::saveUsers() const {
-	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
-	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
-	}
-	file.close();
-
-	for (auto it = users_.begin(); it != users_.end(); ++it) {
-		it->second.save(USER_CONFIG);		
-	}
-}
-
 void ChatServer::saveMessages() const {	
 	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
 	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
@@ -482,11 +476,20 @@ void ChatServer::saveMessages() const {
 }
 
 void ChatServer::loadUsers() {
+	while (fs::exists(USERLIST_LOCK)) {
+		sleep(1);
+	}
+	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
+	}
+	lock.close();
 	std::ifstream file(USER_CONFIG, std::ios::in);
 	if (!file.is_open()) {
 		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
 	}
 
+	users_.clear();
 	while (!file.eof()) {
 		std::string login;
 		std::string password;
@@ -499,6 +502,33 @@ void ChatServer::loadUsers() {
 		}
 	}
 	file.close();
+	fs::remove(USERLIST_LOCK);
+}
+
+void ChatServer::saveUsers() const {
+	while (fs::exists(USERLIST_LOCK)) {
+		sleep(1);
+	}
+	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
+	}
+	lock.close();
+
+	clearPrompt();
+	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
+	printPrompt();
+	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
+	}
+	file.close();
+
+	for (auto it = users_.begin(); it != users_.end(); ++it) {
+		it->second.save(USER_CONFIG);		
+	}
+	
+	fs::remove(USERLIST_LOCK);
 }
 
 void ChatServer::loadMessages() {
@@ -558,35 +588,25 @@ std::string ChatServer::getClientIpAndPort() const {
 	return (result + inet_ntoa(client_.sin_addr) + ":" + std::to_string(ntohs(client_.sin_port)));
 }
 
-void ChatServer::updateUserList() const {
-	const std::string USERLIST_TEMP{  "/tmp/chat_server_userlist.tmp" };
+void ChatServer::removeUserFromFile(const std::string &removedUser) {
 	while (fs::exists(USERLIST_LOCK)) {
 		sleep(1);
 	}
-	std::ofstream{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+	loadUsers();
 
-	std::set<std::string> usersInFile;
-	fs::copy(USER_CONFIG, USERLIST_TEMP);
-	std::ifstream is{ USERLIST_TEMP, std::ios::in };
-	std::ofstream os{ USER_CONFIG, std::ios::out | std::ios::trunc };
-	while (!is.eof()) {
-		std::string user, password, name, temp;
-		getline(is, user);
-		if (user.empty()) {
-			break;
-		}
-		getline(is, password);
-		getline(is, name);
-		if (users_.find(user) == users_.end()) {
-			// User has been removed - don't write his information to file
-			continue;
-		}
-		os << user << '\n' << password << '\n' << name << std::endl;
+	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
 	}
-	os.close();
-	is.close();
-	fs::remove(USERLIST_TEMP);
+	lock.close();
+
+	auto it = users_.find(removedUser);
+	if (it != users_.end()) {
+		users_.erase(it);
+	}
+	
 	fs::remove(USERLIST_LOCK);
+	saveUsers();
 }
 
 void ChatServer::printSystemInformation() const {
