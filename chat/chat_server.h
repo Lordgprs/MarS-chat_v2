@@ -57,15 +57,20 @@ private:
 	void printPrompt() const;
 	unsigned int getPromptLength() const;
 	void clearPrompt() const;
-	void processNewClient(int connection);
-	void startConsole() const;
+	void processNewClient();
+	void startConsole();
 	void checkLogin(int connection) const;
 	void writeBuffer(const std::string &line) const;
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
 	void removeUserFromFile(const std::string &);
-
+	void displayHelp() const;
+	void writeUserFile(int connection) const;
+	void removeUserFile(const std::string &username) const;
+	void updateActiveUsers();
+	void listActiveUsers();
+	void kickClient(const std::string &cmd);
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };
@@ -73,6 +78,7 @@ private:
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
 	const std::string TEMP_DIR { "/tmp/chat_server" };
+	const std::string USERS_DIR { TEMP_DIR + "/users" };
 	const std::string BUFFER{ TEMP_DIR + "/buffer.tmp" };
 	const std::string BUFFER_LOCK{ TEMP_DIR + "/buffer.lock" };
 	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
@@ -84,6 +90,7 @@ private:
 
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
+	std::vector<ConfigFile> activeUsers_;
 	std::string loggedUser_;
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
@@ -94,4 +101,12 @@ private:
 	std::set<pid_t> children_;
 	mutable char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
+	int connection_;
+};
+
+struct ClientInformation {
+	std::string username;
+	pid_t pid;
+	std::string ip;
+	unsigned short port;
 };

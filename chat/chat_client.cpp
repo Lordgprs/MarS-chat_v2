@@ -39,18 +39,29 @@ ChatClient::ChatClient() {
 	if (connection == -1) {
 		throw std::runtime_error{ "Could not connect to server..." };
 	}
+
+	signal(SIGCHLD, SIG_IGN);
 }
 
 ChatClient::~ChatClient() {
 	close(sockFd_);
-	fs::remove_all(TEMP_DIR);
+}
+
+void ChatClient::displayHelp() const {
+	std::cout << "Available commands:\n"
+		" /help - chat help, displays a list of commands to manage the chat\n"
+		" /signup - registration, user enters data for registration\n"
+		" /signin - authorization, only a registered user can authorize\n"
+		" /logout - user logout\n"
+		" /remove - delete registered user\n"
+		" /exit - close the program\n"
+		" Start your message with @login if you want to send a private message,\n"
+		"   otherwise your message will be broadcasted to all users.\n"
+		"User will receive new messages after login\n"
+		<< std::endl;
 }
 
 void ChatClient::cleanExit() const {
-	if(mainPid_ != getpid()) {
-		return;
-	}
-
 	if(pollerPid_ > 0) {
 		kill(pollerPid_, SIGTERM);
 	}
@@ -166,7 +177,6 @@ void ChatClient::startPoller() {
 		throw std::invalid_argument{ "Fatal error: fork() failed" };
 	}
 	if (pollerPid_ > 0) {
-		signal(SIGCHLD, SIG_IGN);
 		return;
 	}
 
@@ -223,11 +233,9 @@ bool ChatClient::readResponseFromFile() const {
 		throw std::runtime_error{ "Error: can not create response lock file" };
 	}
 	lock.close();
-	std::ifstream is{ RESPONSE, std::ios::in };
-	std::string response;
-	getline(is, response);
-	strcpy(message_, response.c_str());
-
+	std::ifstream response{ RESPONSE, std::ios::in };
+	response.getline(message_, MESSAGE_LENGTH);
+	response.close();
 	fs::remove(RESPONSE);
 	fs::remove(RESPONSE_LOCK);
 	return true;
@@ -242,6 +250,7 @@ void ChatClient::signOut() {
 	strcpy(message_, "/logout");
 	sendRequest();
 	loggedUser_.reset();
+	kill(pollerPid_, SIGTERM);
 }
 
 void ChatClient::removeUser(ChatUser& user) {
@@ -251,7 +260,9 @@ void ChatClient::removeUser(ChatUser& user) {
 	}
 	strcpy(message_, "/remove");
 	sendRequest();
-	receiveResponse();
+	while (!readResponseFromFile()) {
+		sleep(1);
+	}
 	if (strncmp(message_, "/response:fail", 14) == 0) {
 		std::cout << "Some issue occured while removing current user on server. Try again later" << std::endl;
 	}
@@ -273,6 +284,22 @@ ssize_t ChatClient::sendRequest() const {
 
 ssize_t ChatClient::receiveResponse() const {
 	ssize_t bytes = read(sockFd_, message_, MESSAGE_LENGTH);
+	if (bytes == -1) {
+		throw std::runtime_error{
+			std::string{ "Error while reading from socket: " } + 
+			std::string{ strerror(errno) } 
+		};
+	}
+	if (bytes == 0 || strncmp(message_, "/response:kick", 14) == 0) {
+		clearPrompt();
+		std::cout << "\nError: connection with server was lost\n" << std::endl;
+		if (getpid() == mainPid_) {
+			cleanExit();
+		}
+		else {
+			kill(mainPid_, SIGTERM);
+		}
+	}
 	std::cout << "Received response: " << message_ << std::endl;
 	return bytes;
 }
@@ -291,7 +318,7 @@ void ChatClient::work() {
 
 			if (strncmp(message_, "/help", 5) == 0) {
 				// output help
-				Chat::displayHelp();
+				displayHelp();
 			}
 			else if (strncmp(message_, "/signup", 7) == 0) {
 				// registration
@@ -311,7 +338,7 @@ void ChatClient::work() {
 					removeUser(*loggedUser_);
 				}
 			}
-			else if (loggedUser_) {
+			else if (loggedUser_ && *message_ != '/') {
 				sendRequest();
 			}
 			else if (
@@ -340,6 +367,22 @@ void ChatClient::clearPrompt() const {
 	// Using ANSI escape sequence CSI2K and then carriage return
 	std::cout << "\x1B[2K\r";
 	std::cout.flush();
+}
+
+void ChatClient::sigIntHandler(int signum) const {
+	if (mainPid_ != getpid()) {
+		return;
+	}
+	std::cout << "\nCaught interrupt signal!" << std::endl;
+	cleanExit();
+}
+
+void ChatClient::sigTermHandler(int signum) const {
+	if (mainPid_ != getpid()) {
+		exit(EXIT_SUCCESS);
+	}
+	std::cout << "\nCaught terminate signal!" << std::endl;
+	cleanExit();
 }
 
 void ChatClient::printSystemInformation() const {

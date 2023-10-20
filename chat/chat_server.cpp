@@ -31,6 +31,7 @@ ChatServer::ChatServer() {
 		};
 	}
 	fs::create_directory(TEMP_DIR);
+	fs::create_directory(USERS_DIR);
 	fs::current_path(".");
 	try {
 		loadUsers();
@@ -93,6 +94,16 @@ ChatServer::~ChatServer() {
 	if(mainPid_ == getpid()) {
 		wait(nullptr);
 	}
+}
+
+void ChatServer::displayHelp() const {
+	std::cout << "Available commands:\n"
+		" /help: chat help, displays a list of commands to manage the chat\n"
+		" /list: list connected users\n"
+		" /kick <username>: kick connected user\n"
+		" /remove: delete inactive user\n"
+		" /exit, /quit, Ctrl-C: close the program\n"
+		<< std::endl;
 }
 
 // login availability
@@ -206,8 +217,65 @@ void ChatServer::signIn(int connection) {
 		std::string answer{ std::string{ "/response:success:" } + it->second.getName() };
 		auto bytes = write(connection, answer.c_str(), answer.length() + 1);
 		loggedUser_ = login;
+		writeUserFile(connection);
 		printPrompt();
 	}
+}
+
+void ChatServer::writeUserFile(int connection) const {
+	if (loggedUser_.empty()) {
+		clearPrompt();
+		std::cout << "Error: trying to save user information without login" << std::endl;
+		printPrompt();
+		return;
+	}
+
+	const std::string USER_LOCK { USERS_DIR + "/" + loggedUser_ + ".lock" };
+	const std::string USER_INFO { USERS_DIR + "/" + loggedUser_ + ".info" };
+	while(fs::exists(USER_LOCK)) {
+		sleep(1);
+	}
+
+	std::ofstream lock{ USER_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open user lock file for writing" };
+	}
+	lock.close();
+	std::ofstream userInfo{ USER_INFO };
+	if (!userInfo.is_open()) {
+		fs::remove(USER_LOCK);
+		throw std::runtime_error{ "Error: can not open user information file for writing" };
+	}
+	userInfo <<
+		"Username = " << loggedUser_ << '\n' <<
+		"Pid = " << getpid() << '\n' <<
+		"Address = " << getClientIpAndPort() << '\n' << 
+		"Connection = " << connection << std::endl;
+	userInfo.close();
+
+	fs::remove(USER_LOCK);
+}
+
+void ChatServer::removeUserFile(const std::string &username) const {
+	if (username.empty()) {
+		throw std::runtime_error { "Failed to remove user file without correct username" };
+	}
+
+	const std::string USER_LOCK { USERS_DIR + "/" + username + ".lock" };
+	const std::string USER_INFO { USERS_DIR + "/" + username + ".info" };
+	while(fs::exists(USER_LOCK)) {
+		sleep(1);
+	}
+
+	std::ofstream lock{ USER_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open user lock file for writing" };
+	}
+	lock.close();
+	if (fs::exists(USER_INFO)) {
+		fs::remove(USER_INFO);
+	}
+	fs::remove(USER_LOCK);
 }
 
 void ChatServer::signOut() {
@@ -215,6 +283,7 @@ void ChatServer::signOut() {
 	std::cout << "User '" << loggedUser_ << "' logged out at " << getClientIpAndPort() << std::endl;
 	printPrompt();
 	users_.at(loggedUser_).logout();
+	removeUserFile(loggedUser_);
 	loggedUser_.clear();
 }
 
@@ -267,6 +336,38 @@ void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& messa
 	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
 }
 
+void ChatServer::listActiveUsers() {
+	updateActiveUsers();
+	clearPrompt();
+	std::cout << "Active users:" << std::endl;
+	for (const auto &user: activeUsers_) {
+		std::cout << "Name: " << user["Username"] << "; Address: " << user["Address"] << "; Pid: " << user["Pid"] << std::endl;
+	}
+	std::cout << std::endl;
+}
+
+void ChatServer::kickClient(const std::string &cmd) {
+	auto tokens = Chat::split(cmd, " ");
+	if (tokens.size() != 2) {
+		throw std::invalid_argument{ "Error: invalid format" };
+	}
+	updateActiveUsers();
+	auto it = users_.find(tokens[1]);
+	if (it == users_.end()) {
+		throw std::invalid_argument{ "Error: user not exist" };
+	}
+	if (!it->second.isLoggedIn()) {
+		throw std::invalid_argument{ "Error: user is not logged in" };
+	}
+	for (const auto &user: activeUsers_) {
+		if (user["Username"] == tokens[1]) {
+			kill(stoi(user["Pid"]), SIGTERM);
+			users_.at(tokens[1]).logout();
+			removeUserFile(tokens[1]);
+		}
+	}
+}
+
 void ChatServer::work() {
 	socklen_t length = sizeof(client_);
 	consolePid_ = fork();
@@ -276,10 +377,10 @@ void ChatServer::work() {
 	else {
 		while (mainLoopActive_) {
 			socklen_t length = sizeof(client_);
-			auto connection = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+			connection_ = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
 			int clientPid = fork();
 			if (clientPid == 0) {
-				processNewClient(connection);
+				processNewClient();
 			}
 			else {
 				children_.insert(clientPid);
@@ -288,12 +389,21 @@ void ChatServer::work() {
 	}
 }
 
-void ChatServer::startConsole() const {
+void ChatServer::startConsole() {
 	std::string cmd;
 	while(mainLoopActive_) {
 		getline(std::cin, cmd);
 		if (cmd == "/quit" || cmd == "/exit") {
 			break;
+		}
+		if (cmd == "/help") {
+			displayHelp();
+		}
+		else if (cmd.substr(0, 5) == "/kick") {
+			kickClient(cmd);
+		}
+		else if (cmd == "/list") {
+			listActiveUsers();
 		}
 		if (mainLoopActive_) {
 			printPrompt();
@@ -310,6 +420,24 @@ void ChatServer::writeBuffer(const std::string &text) const {
 	buffer << text;
 	buffer.close();
 	fs::remove(BUFFER_LOCK);
+}
+
+void ChatServer::updateActiveUsers() {
+	activeUsers_.clear();
+	for (const auto &file: fs::directory_iterator(USERS_DIR)) {
+		activeUsers_.emplace_back(file.path());
+	}
+	for (auto &it: users_) {
+		it.second.logout();
+	}
+	for (const auto &user: activeUsers_) {
+		auto it = users_.find(user["Username"]);
+		if (it != users_.end()) {
+			if(!it->second.isLoggedIn()) {
+				it->second.login();
+			}
+		}
+	}
 }
 
 void ChatServer::cleanExit() {
@@ -337,6 +465,13 @@ void ChatServer::cleanExit() {
 void ChatServer::terminateChild() const {
 	clearPrompt();
 	std::cout << "Exiting from child " << getpid() << "..." << std::endl;
+	if (connection_ != 0) {
+		strcpy(message_, "/response:kick");
+		if (write(connection_, message_, MESSAGE_LENGTH) == -1) {
+			std::cerr << "Error while calling write: " << strerror(errno) << std::endl;
+		}
+		close(connection_);
+	}
 	printPrompt();
 
 	exit(EXIT_SUCCESS);
@@ -349,6 +484,12 @@ void ChatServer::childDeathHandler(int signum) {
 			cleanExit();
 		}
 		else {
+			updateActiveUsers();
+			for (const auto &user: activeUsers_) {
+				if (stoi(user["Pid"]) == pid) {
+					removeUserFile(user["Username"]);
+				}
+			}
 			auto it = children_.find(pid);
 			if (it != children_.end()) {
 				children_.erase(it);
@@ -379,14 +520,14 @@ void ChatServer::sigTermHandler(int signum) {
 	}
 }
 
-void ChatServer::processNewClient(int connection) {
+void ChatServer::processNewClient() {
 	clearPrompt();
 	std::cout << "Client connected from " << getClientIpAndPort() << std::endl;
 	printPrompt();
 	while (true) {
 		try {
 			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
-			auto bytes = read(connection, message_, MESSAGE_LENGTH);
+			auto bytes = read(connection_, message_, MESSAGE_LENGTH);
 			if (bytes == -1) {
 				throw std::runtime_error{
 					std::string{ "Error while reading from socket: " } + 
@@ -403,20 +544,16 @@ void ChatServer::processNewClient(int connection) {
 			clearPrompt();
 			std::cout << "Received " << bytes << " bytes: " << message_ << std::endl;
 			printPrompt();
-			if (strncmp(message_, "/help", 5) == 0) {
-				// output help
-				Chat::displayHelp();
-			}
-			else if (strncmp(message_, "/checklogin", 11) == 0) {
-				checkLogin(connection);
+			if (strncmp(message_, "/checklogin", 11) == 0) {
+				checkLogin(connection_);
 			}
 			else if (strncmp(message_, "/signup", 7) == 0) {
 				// registration
-				signUp(connection);
+				signUp(connection_);
 			}
 			else if (strncmp(message_, "/signin", 7) == 0) {
 				// authorization
-				signIn(connection);
+				signIn(connection_);
 			}
 			else if (strncmp(message_, "/logout", 7) == 0) {
 				// logout
@@ -425,7 +562,7 @@ void ChatServer::processNewClient(int connection) {
 			else if (strncmp(message_, "/remove", 7) == 0) {
 				// removing current user
 				if (!loggedUser_.empty()) {
-					removeUser(connection);
+					removeUser(connection_);
 				}
 			}
 			else if (
@@ -486,6 +623,7 @@ void ChatServer::loadUsers() {
 	lock.close();
 	std::ifstream file(USER_CONFIG, std::ios::in);
 	if (!file.is_open()) {
+		fs::remove(USERLIST_LOCK);
 		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
 	}
 
@@ -520,6 +658,7 @@ void ChatServer::saveUsers() const {
 	printPrompt();
 	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
+		fs::remove(USERLIST_LOCK);
 		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
 	}
 	file.close();

@@ -2,7 +2,9 @@
 
 int main() {
 	try {
-		ChatClient chat;
+		static ChatClient chat;
+		signal(SIGTERM, [](int signum){ chat.sigTermHandler(signum); });
+		signal(SIGINT, [](int signum){ chat.sigIntHandler(signum); });
 		chat.work();
 	}
 	catch (const std::runtime_error &e) {

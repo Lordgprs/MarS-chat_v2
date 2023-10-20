@@ -33,6 +33,8 @@ public:
 	ChatClient(); // constructor
 	~ChatClient(); // destructor
 	void work(); // main work
+	void sigIntHandler(int signum) const;
+	void sigTermHandler(int signum) const;
 
 private:
 	bool isLoginAvailable(const std::string& login) const; // login availability
@@ -52,6 +54,7 @@ private:
 	void startPoller();
 	void clearPrompt() const;
 	void cleanExit() const;
+	void displayHelp() const;
 	
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string USER_CONFIG{ "users.cfg" };
