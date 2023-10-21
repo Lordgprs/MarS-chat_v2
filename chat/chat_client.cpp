@@ -166,6 +166,9 @@ void ChatClient::signIn() {
 		loggedUser_ = make_shared<ChatUser>(login, password, name);
 		startPoller();
 	}
+	else if (strncmp(message_, "/response:loggedin", 18) == 0) {
+		std::cout << "User " << std::quoted(login) << " is already logged in" << std::endl;	
+	}
 	else {
 		std::cout << "Login failed" << std::endl;
 	}

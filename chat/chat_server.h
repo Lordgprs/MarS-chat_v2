@@ -40,11 +40,11 @@ public:
 
 private:	
 	bool isLoginAvailable(const std::string& login) const; // login availability
-	void signUp(int connection); // registration
+	void signUp(); // registration
 	bool isValidLogin(const std::string& login) const; // login verification
-	void signIn(int connection); // authorization
+	void signIn(); // authorization
 	void signOut(); // user logout
-	void removeUser(int connection); // deleting a user
+	void removeUser(); // deleting a user
 	void sendMessage(const std::string& message); // sending a message
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
@@ -59,14 +59,14 @@ private:
 	void clearPrompt() const;
 	void processNewClient();
 	void startConsole();
-	void checkLogin(int connection) const;
+	void checkLogin() const;
 	void writeBuffer(const std::string &line) const;
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
 	void removeUserFromFile(const std::string &);
 	void displayHelp() const;
-	void writeUserFile(int connection) const;
+	void writeUserFile() const;
 	void removeUserFile(const std::string &username) const;
 	void updateActiveUsers();
 	void listActiveUsers();

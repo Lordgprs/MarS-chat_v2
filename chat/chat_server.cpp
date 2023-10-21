@@ -9,6 +9,7 @@
 #if defined(__linux__)
 #include <sys/utsname.h>
 #include <errno.h>
+#include <sys/select.h>
 #elif defined(_WIN64) or defined(_WIN32)
 #pragma comment(lib, "ntdll")
 
@@ -111,7 +112,7 @@ bool ChatServer::isLoginAvailable(const std::string& login) const {
 	return users_.find(login) == users_.end();
 }
 
-void ChatServer::checkLogin(int connection) const {
+void ChatServer::checkLogin() const {
 	auto tokens = Chat::split(std::string{ message_ }, ":");
 	strcpy(message_, "/response:");
 	if (tokens.size() < 2) {
@@ -124,11 +125,11 @@ void ChatServer::checkLogin(int connection) const {
 		strcat(message_, "available");
 	}
 	
-	auto bytes = write(connection, message_, MESSAGE_LENGTH);
+	auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 	printPrompt();
 }
 
-void ChatServer::signUp(int connection) {
+void ChatServer::signUp() {
 	std::string hash;
 	auto tokens = Chat::split(message_, ":");
 	// 0: cmd, 1: login, 2: password, 3: name
@@ -149,7 +150,7 @@ void ChatServer::signUp(int connection) {
 
 	users_.emplace(tokens[1], ChatUser(tokens[1], hash, tokens[3]));
 	strcpy(message_, "/response:success");
-	auto bytes = write(connection, message_, MESSAGE_LENGTH);
+	auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 	clearPrompt();
 	std::cout << "User '" << tokens[1] << "' has bin registered" << std::endl;
 	printPrompt();
@@ -180,7 +181,7 @@ bool ChatServer::isValidLogin(const std::string& login) const {
 	return true;
 }
 
-void ChatServer::signIn(int connection) {
+void ChatServer::signIn() {
 	if (!loggedUser_.empty()) {
 		std::cout << "For log in you must sign out first. Enter '/logout' to sign out\n" << std::endl;
 		return;
@@ -191,6 +192,16 @@ void ChatServer::signIn(int connection) {
 	auto tokens = Chat::split(message_, ":");
 	login = tokens[1];
 	password = tokens[2];
+
+	updateActiveUsers();
+	if (users_.at(login).isLoggedIn()) {
+		strcpy(message_, "/response:loggedin");
+		clearPrompt();
+		std::cout << "User " << std::quoted(login) << " is already logged in" << std::endl;
+		std::cout << "Sending response: " << message_ << std::endl;
+		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
+		printPrompt();
+	}
 
 	SHA256 sha;
 	sha.update(password);
@@ -204,25 +215,26 @@ void ChatServer::signIn(int connection) {
 		it->second.getPassword() != hash) {
 		// invalid argument passed
 		clearPrompt();
-		std::cout << "Login failed for user '" << login << "' from " << getClientIpAndPort() << std::endl;
-		std::string answer{ "/response:fail" };
-		std::cout << "Sending response: " << answer.c_str() << std::endl;
-		auto bytes = write(connection, answer.c_str(), answer.length() + 1);
+		std::cout << "Login failed for user " << std::quoted(login) << " from " << getClientIpAndPort() << std::endl;
+		strcpy(message_, "/response:fail");
+		std::cout << "Sending response: " << message_ << std::endl;
+		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		printPrompt();
 	}
 	else {
 		it->second.login();
 		clearPrompt();
-		std::cout << "User '" << it->second.getLogin() << "' successfully logged in" << std::endl;
-		std::string answer{ std::string{ "/response:success:" } + it->second.getName() };
-		auto bytes = write(connection, answer.c_str(), answer.length() + 1);
+		std::cout << "User " << std::quoted(it->second.getLogin()) << " successfully logged in" << std::endl;
+		strcpy(message_, "/response:success:");
+		strcat(message_, it->second.getName().c_str());
+		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		loggedUser_ = login;
-		writeUserFile(connection);
+		writeUserFile();
 		printPrompt();
 	}
 }
 
-void ChatServer::writeUserFile(int connection) const {
+void ChatServer::writeUserFile() const {
 	if (loggedUser_.empty()) {
 		clearPrompt();
 		std::cout << "Error: trying to save user information without login" << std::endl;
@@ -249,8 +261,7 @@ void ChatServer::writeUserFile(int connection) const {
 	userInfo <<
 		"Username = " << loggedUser_ << '\n' <<
 		"Pid = " << getpid() << '\n' <<
-		"Address = " << getClientIpAndPort() << '\n' << 
-		"Connection = " << connection << std::endl;
+		"Address = " << getClientIpAndPort() << std::endl; 
 	userInfo.close();
 
 	fs::remove(USER_LOCK);
@@ -287,16 +298,16 @@ void ChatServer::signOut() {
 	loggedUser_.clear();
 }
 
-void ChatServer::removeUser(int connection) {
+void ChatServer::removeUser() {
 	std::string removingUser{ loggedUser_ };
 	if (!users_.at(removingUser).isLoggedIn()) {
 		strcpy(message_, "/response:fail");
-		write(connection, message_, MESSAGE_LENGTH);
+		write(connection_, message_, MESSAGE_LENGTH);
 		return;
 	}
 		
 	strcpy(message_, "/response:success-test");
-	write(connection, message_, MESSAGE_LENGTH);
+	write(connection_, message_, MESSAGE_LENGTH);
 	signOut();
 	removeUserFromFile(removingUser);
 	loggedUser_.clear();
@@ -524,10 +535,29 @@ void ChatServer::processNewClient() {
 	clearPrompt();
 	std::cout << "Client connected from " << getClientIpAndPort() << std::endl;
 	printPrompt();
+
+	fd_set rfds;
 	while (true) {
 		try {
+			int bytes;
+			struct timeval tv;
+			tv.tv_sec = 0;
+			tv.tv_usec = 500000; // half second
+			FD_ZERO(&rfds);
+			FD_SET(connection_, &rfds);
+			auto retval = select(connection_ + 1, &rfds, nullptr, nullptr, &tv);
+			if (retval == -1) {
+				clearPrompt();
+				std::cout << "An error occured while trying to call select(): " << strerror(errno) << std::endl;
+				printPrompt();
+				continue;
+			}
+			if (retval == 0) { // select() timed out
+				continue;
+			}
+
 			std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
-			auto bytes = read(connection_, message_, MESSAGE_LENGTH);
+			bytes = read(connection_, message_, MESSAGE_LENGTH);
 			if (bytes == -1) {
 				throw std::runtime_error{
 					std::string{ "Error while reading from socket: " } + 
@@ -545,15 +575,15 @@ void ChatServer::processNewClient() {
 			std::cout << "Received " << bytes << " bytes: " << message_ << std::endl;
 			printPrompt();
 			if (strncmp(message_, "/checklogin", 11) == 0) {
-				checkLogin(connection_);
+				checkLogin();
 			}
 			else if (strncmp(message_, "/signup", 7) == 0) {
 				// registration
-				signUp(connection_);
+				signUp();
 			}
 			else if (strncmp(message_, "/signin", 7) == 0) {
 				// authorization
-				signIn(connection_);
+				signIn();
 			}
 			else if (strncmp(message_, "/logout", 7) == 0) {
 				// logout
@@ -562,7 +592,7 @@ void ChatServer::processNewClient() {
 			else if (strncmp(message_, "/remove", 7) == 0) {
 				// removing current user
 				if (!loggedUser_.empty()) {
-					removeUser(connection_);
+					removeUser();
 				}
 			}
 			else if (
