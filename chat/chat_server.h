@@ -45,6 +45,7 @@ private:
 	void signIn(); // authorization
 	void signOut(); // user logout
 	void removeUser(); // deleting a user
+	void removeUser(const std::string &cmd); // deleting a user
 	void sendMessage(); // sending a message
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
@@ -60,7 +61,6 @@ private:
 	void processNewClient();
 	void startConsole();
 	void checkLogin() const;
-	void writeBuffer(const std::string &line) const;
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
@@ -82,8 +82,6 @@ private:
 	const std::string MESSAGE_LOCK{ USERS_DIR + "/messages.lock" };
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
-	const std::string BUFFER{ TEMP_DIR + "/buffer.tmp" };
-	const std::string BUFFER_LOCK{ TEMP_DIR + "/buffer.lock" };
 	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
 	const int BACKLOG{ 5 };
 

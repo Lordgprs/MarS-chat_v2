@@ -412,3 +412,39 @@ BROADCAST
 max
 max,vpupkin
 test
+PRIVATE
+max
+test
+UNREAD
+test 1
+BROADCAST
+max
+max,test,vpupkin
+test 2
+BROADCAST
+test
+max,test,vpupkin
+test 3
+PRIVATE
+test
+max
+UNREAD
+test 4
+PRIVATE
+test
+test
+UNREAD
+test 5
+BROADCAST
+max
+max,test,vpupkin
+test
+BROADCAST
+max
+max,test,vpupkin
+test 1
+PRIVATE
+max
+test
+UNREAD
+test 2

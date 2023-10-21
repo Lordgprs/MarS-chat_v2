@@ -311,6 +311,28 @@ void ChatServer::signOut() {
 	loggedUser_.clear();
 }
 
+void ChatServer::removeUser(const std::string &cmd) {
+	std::string removingUser{ cmd.substr(7, cmd.length() - 7) };
+	std::erase(removingUser, ' ');
+	loadUsers();
+	updateActiveUsers();
+	auto it = users_.find(removingUser);
+	if (it == users_.end()) {
+		clearPrompt();
+		std::cout << "User " << std::quoted(removingUser) << " does not exist" << std::endl;
+		return;
+	}
+	if (it->second.isLoggedIn()) {
+		clearPrompt();
+		std::cout << "Can not remove user " << std::quoted(removingUser) << " because he/she is logged in now. Kick him/her first" << std::endl;
+		return;
+	}
+	
+	clearPrompt();
+	std::cout << "Removing user " << std::quoted(removingUser) << std::endl;
+	removeUserFromFile(removingUser);	
+}
+
 void ChatServer::removeUser() {
 	std::string removingUser{ loggedUser_ };
 	if (!users_.at(removingUser).isLoggedIn()) {
@@ -325,7 +347,7 @@ void ChatServer::removeUser() {
 	removeUserFromFile(removingUser);
 	loggedUser_.clear();
 	clearPrompt();
-	std::cout << "User '" << removingUser << "' has been removed" << std::endl;
+	std::cout << "User " << std::quoted(removingUser) << " has been removed" << std::endl;
 	printPrompt();
 }
 
@@ -343,7 +365,6 @@ void ChatServer::sendMessage() {
 			clearPrompt();
 			printPrompt();
 			std::string messageText = message.substr(pos + 1);
-			std::cout << "Sending private message to " << std::quoted(receiverName) << ": " << messageText << std::endl;
 			try {
 				sendPrivateMessage(users_.at(loggedUser_), receiverName, messageText);
 			}
@@ -522,21 +543,11 @@ void ChatServer::startConsole() {
 		else if (cmd == "/list") {
 			listActiveUsers();
 		}
-		if (mainLoopActive_) {
-			printPrompt();
+		else if (cmd.substr(0, 7) == "/remove") {
+			removeUser(cmd);
 		}
+		printPrompt();
 	}
-}
-
-void ChatServer::writeBuffer(const std::string &text) const {
-	while (fs::exists(BUFFER_LOCK)) {
-		sleep(1);
-	}
-	std::ofstream{BUFFER_LOCK, std::ios::out | std::ios::trunc};
-	std::ofstream buffer{ BUFFER, std::ios::out | std::ios::trunc };
-	buffer << text;
-	buffer.close();
-	fs::remove(BUFFER_LOCK);
 }
 
 void ChatServer::updateActiveUsers() {
@@ -798,9 +809,6 @@ void ChatServer::saveUsers() const {
 	}
 	lock.close();
 
-	clearPrompt();
-	std::cout << "Saving users information to file " << USER_CONFIG << "..." << std::endl;
-	printPrompt();
 	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
 		fs::remove(USERLIST_LOCK);
