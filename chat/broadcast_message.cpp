@@ -4,6 +4,9 @@
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 BroadcastMessage::BroadcastMessage(
 	const std::string &sender,
@@ -49,7 +52,13 @@ bool BroadcastMessage::isRead() const {
 }
 
 void BroadcastMessage::save(const std::string &filename) const {
-	std::ofstream file(filename, std::ios::out | std::ios::app);
+	std::ofstream file;
+	if (!fs::exists(filename)) {
+		file.open(filename, std::ios::out | std::ios::trunc);
+	}
+	else {
+		file.open(filename, std::ios::app);
+	}
 	if (!file.is_open()) {
 		throw std::runtime_error{ "Error: cannot open file" + filename + " for append" };
 	}
@@ -68,3 +77,6 @@ void BroadcastMessage::save(const std::string &filename) const {
 	file.close();
 }
 
+std::string BroadcastMessage::createTransferString() const {
+	return std::string{ "BROADCAST\n" } + sender_ + "\n" + text_ + "\n";
+}

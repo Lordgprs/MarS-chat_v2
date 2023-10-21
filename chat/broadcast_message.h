@@ -23,6 +23,9 @@ public:
 	// save message to file
 	void save(const std::string &filename) const override;
 
+	// pack string with message information for transferring it through a network
+	std::string createTransferString() const override;
+
 private:
 
 	std::map<std::string, ChatUser> users_unread_;

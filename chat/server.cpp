@@ -12,6 +12,9 @@ int main() {
 	catch (const std::runtime_error &e) {
 		std::cerr << "Fatal error! " << e.what() << std::endl;
 	}
+	catch (const std::out_of_range &e) {
+		std::cerr << "Fatal error! " << getpid() << " " << e.what() << std::endl;
+	}
 
 	return EXIT_SUCCESS;
 }

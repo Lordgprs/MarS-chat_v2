@@ -14,6 +14,9 @@ public:
 	// check if message is read
 	virtual bool isRead() const = 0;
 
+	// pack string with message information for transferring it through a network
+	virtual std::string createTransferString() const = 0;
+
 	// save message to file
 	virtual void save(const std::string &) const = 0;
 

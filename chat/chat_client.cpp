@@ -37,6 +37,9 @@ ChatClient::ChatClient() {
 
 	auto connection = connect(sockFd_, reinterpret_cast<sockaddr *>(&server_), sizeof(server_));
 	if (connection == -1) {
+		if(fs::exists(TEMP_DIR)) {
+			fs::remove_all(TEMP_DIR);
+		}
 		throw std::runtime_error{ "Could not connect to server..." };
 	}
 
@@ -154,7 +157,7 @@ void ChatClient::signIn() {
 	std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 	strcpy(message_, cmd.c_str());
 	sendRequest();
-	std::cout << "Receiving response: " << std::endl;
+	// std::cout << "Receiving response: " << std::endl;
 	receiveResponse();
 	if (strncmp(message_, "/response:success", 17) == 0) {
 		std::cout << "Login successful" << std::endl;
@@ -303,12 +306,12 @@ ssize_t ChatClient::receiveResponse() const {
 			kill(mainPid_, SIGTERM);
 		}
 	}
-	std::cout << "Received response: " << message_ << std::endl;
 	return bytes;
 }
 
 void ChatClient::printPrompt() const {
 	std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
+	std::cout.flush();
 }
 
 void ChatClient::work() {

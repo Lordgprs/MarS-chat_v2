@@ -45,14 +45,14 @@ private:
 	void signIn(); // authorization
 	void signOut(); // user logout
 	void removeUser(); // deleting a user
-	void sendMessage(const std::string& message); // sending a message
+	void sendMessage(); // sending a message
 	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
 	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
 	void checkUnreadMessages(); // check unread messages
 	void saveUsers() const;
 	void saveMessages() const; // save all messages to file
 	void loadUsers(); // load user list from file
-	void loadMessages(); // load message list from file
+	void loadMessages(const std::string &filename); // load message list from file
 	void printSystemInformation() const; // print information about process and OS
 	void printPrompt() const;
 	unsigned int getPromptLength() const;
@@ -71,14 +71,17 @@ private:
 	void updateActiveUsers();
 	void listActiveUsers();
 	void kickClient(const std::string &cmd);
+	void writeMessageToHistory(std::shared_ptr<ChatMessage> message) const;
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
-	const std::string USER_CONFIG{ "users.cfg" };
-	const std::string MESSAGES_LOG{ "messages.log" };
-	const std::string CONFIG_FILE{ "server.cfg" };
-	const std::string PROMPT{ "server>" };
 	const std::string TEMP_DIR { "/tmp/chat_server" };
 	const std::string USERS_DIR { TEMP_DIR + "/users" };
+	const std::string USER_CONFIG{ "users.cfg" };
+	const std::string HISTORY_LOG{ "messages.log" };
+	const std::string HISTORY_LOCK{ TEMP_DIR + "/history.lock" };
+	const std::string MESSAGE_LOCK{ USERS_DIR + "/messages.lock" };
+	const std::string CONFIG_FILE{ "server.cfg" };
+	const std::string PROMPT{ "server>" };
 	const std::string BUFFER{ TEMP_DIR + "/buffer.tmp" };
 	const std::string BUFFER_LOCK{ TEMP_DIR + "/buffer.lock" };
 	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };

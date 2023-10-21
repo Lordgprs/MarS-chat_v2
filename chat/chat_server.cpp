@@ -40,27 +40,15 @@ ChatServer::ChatServer() {
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
 	}
-	try {
-		loadMessages();
-	}
-	catch (const std::runtime_error &e) {
-		std::cerr << e.what() << std::endl;
-	}
 
-	std::cout <<
-		"Welcome to the chat admin console. "
-		"This chat server supports multiple client login and creates own process for each one.\n"
-		"Type /help to view help" << std::endl;
+	// We don't want to load message history at startup
+	// try {
+	//	loadMessages(HISTORY_LOG);
+	// }
+	// catch (const std::runtime_error &e) {
+	// 	std::cerr << e.what() << std::endl;
+	// }
 
-	if(users_.empty()) {
-		return;
-	}
-
-	std::cout << "Registered users: ";
-	for (const auto kv: users_) {
-		std::cout << '\'' << kv.first << "' ";
-	}
-	std::cout << '\n' << std::endl;
 	
 	sockFd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sockFd_ == -1) {
@@ -85,7 +73,19 @@ ChatServer::ChatServer() {
 	if (connectionStatus == -1) {
 		throw std::runtime_error{ "Error: could not listen the specified TCP port" };
 	}
-	std::cout << "Server has been started and listening port TCP/" << config_["ListenPort"] << '\n';
+	std::cout <<
+		"Welcome to the chat admin console. "
+		"This chat server supports multiple client login and creates own process for each one.\n"
+		"Type /help to view help" << std::endl;
+
+	if(!users_.empty()) {
+		std::cout << "Registered users: ";
+		for (const auto &it: users_) {
+			std::cout << std::quoted(it.first) << ' ';
+		}
+	}
+
+	std::cout << "\n\nServer has been started and listening port TCP/" << config_["ListenPort"] << std::endl;
 	printPrompt();
 }
 
@@ -163,7 +163,14 @@ void ChatServer::signUp() {
 			throw std::runtime_error{ "Error: can not create userlist lock file!" };
 		}
 		lock.close();
-		users_.at(tokens[1]).save(USER_CONFIG);
+		try {
+			users_.at(tokens[1]).save(USER_CONFIG);
+		}
+		catch (const std::out_of_range &e) {
+			clearPrompt();
+			std::cout << "Error: can not save user information to file (" << e.what() << std::endl;
+			printPrompt();
+		}
 		fs::remove(USERLIST_LOCK);
 	}
 	catch (const std::runtime_error &e) {
@@ -193,16 +200,6 @@ void ChatServer::signIn() {
 	login = tokens[1];
 	password = tokens[2];
 
-	updateActiveUsers();
-	if (users_.at(login).isLoggedIn()) {
-		strcpy(message_, "/response:loggedin");
-		clearPrompt();
-		std::cout << "User " << std::quoted(login) << " is already logged in" << std::endl;
-		std::cout << "Sending response: " << message_ << std::endl;
-		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
-		printPrompt();
-	}
-
 	SHA256 sha;
 	sha.update(password);
 	uint8_t *digest = sha.digest();
@@ -217,11 +214,20 @@ void ChatServer::signIn() {
 		clearPrompt();
 		std::cout << "Login failed for user " << std::quoted(login) << " from " << getClientIpAndPort() << std::endl;
 		strcpy(message_, "/response:fail");
-		std::cout << "Sending response: " << message_ << std::endl;
 		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
-		printPrompt();
 	}
 	else {
+		updateActiveUsers();
+		if (users_.at(login).isLoggedIn()) {
+			strcpy(message_, "/response:loggedin");
+			clearPrompt();
+			std::cout << "User " << std::quoted(login) << " is already logged in" << std::endl;
+			std::cout << "Sending response: " << message_ << std::endl;
+			auto bytes = write(connection_, message_, MESSAGE_LENGTH);
+			printPrompt();
+			return;
+		}
+
 		it->second.login();
 		clearPrompt();
 		std::cout << "User " << std::quoted(it->second.getLogin()) << " successfully logged in" << std::endl;
@@ -230,8 +236,8 @@ void ChatServer::signIn() {
 		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		loggedUser_ = login;
 		writeUserFile();
-		printPrompt();
 	}
+	printPrompt();
 }
 
 void ChatServer::writeUserFile() const {
@@ -293,7 +299,14 @@ void ChatServer::signOut() {
 	clearPrompt();
 	std::cout << "User '" << loggedUser_ << "' logged out at " << getClientIpAndPort() << std::endl;
 	printPrompt();
-	users_.at(loggedUser_).logout();
+	try {
+		users_.at(loggedUser_).logout();
+	}
+	catch (const std::out_of_range &e) {
+		clearPrompt();
+		std::cout << "Error: can not log out (" << e.what() << std::endl;
+		printPrompt();
+	}
 	removeUserFile(loggedUser_);
 	loggedUser_.clear();
 }
@@ -316,35 +329,120 @@ void ChatServer::removeUser() {
 	printPrompt();
 }
 
-void ChatServer::sendMessage(const std::string& message) {
+void ChatServer::sendMessage() {
+	std::string message{ message_ };
 	if (message.empty()) {
-		// invalid argument passed
-		throw std::invalid_argument("Message cannot be empty");
+		// message can no be empty
+		return;
 	}
 
 	if (message[0] == '@') {
 		size_t pos = message.find(' ');
 		if (pos != std::string::npos) {
 			std::string receiverName = message.substr(1, pos - 1);
+			clearPrompt();
+			printPrompt();
 			std::string messageText = message.substr(pos + 1);
-			sendPrivateMessage(users_.at(loggedUser_), receiverName, messageText);
+			std::cout << "Sending private message to " << std::quoted(receiverName) << ": " << messageText << std::endl;
+			try {
+				sendPrivateMessage(users_.at(loggedUser_), receiverName, messageText);
+			}
+			catch (const std::out_of_range &e) {
+				clearPrompt();
+				std::cout << "Error: can not send private message (" << e.what() << std::endl;
+				printPrompt();
+			}
 		}
 	}
 	else {
-		sendBroadcastMessage(users_.at(loggedUser_), message);
+		try {
+			sendBroadcastMessage(users_.at(loggedUser_), message);
+		}
+		catch (const std::out_of_range &e) {
+			clearPrompt();
+			std::cout << "Error: can not send broadcast message (" << e.what() << std::endl;
+			printPrompt();
+		}
 	}
+}
+
+void ChatServer::writeMessageToHistory(const std::shared_ptr<ChatMessage> message) const {
+	while (fs::exists(HISTORY_LOCK)) {
+		sleep(1);
+	}
+	std::ofstream lock{ HISTORY_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open history lock file for writing" };
+	}
+	try {
+		message->save(HISTORY_LOG);
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not write message to history log (" << e.what() << ")" << std::endl;
+		printPrompt();
+	}
+	lock.close();
+	fs::remove(HISTORY_LOCK);	
 }
 
 void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
 	if (users_.find(receiverName) == users_.end()) {
-		throw std::invalid_argument("User @" + receiverName + " does not exist");
+		throw std::invalid_argument("RECEIVER_DOES_NOT_EXIST");
 	}
-	messages_.emplace_back(std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText));
+
+	auto newMessage = std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText);
+	writeMessageToHistory(newMessage);
+	
+	while (fs::exists(MESSAGE_LOCK)) {
+		sleep(1);
+	}
+	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
+	}
+	try {
+		std::string userMessages{ TEMP_DIR + "/messages-" + receiverName + ".txt" }; 
+		newMessage->save(userMessages);
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not write message to temporary file for futher transfer (" << e.what() << ")" << std::endl;
+		printPrompt();
+	}
+	lock.close();
+	fs::remove(MESSAGE_LOCK);	
 }
 
 void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
-	messages_.emplace_back(std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_));
+	auto newMessage = std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_);
+	
+	writeMessageToHistory(newMessage);
+	
+	while (fs::exists(MESSAGE_LOCK)) {
+		sleep(1);
+	}
+	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
+	}
+	lock.close();
+	try {
+		for(const auto &it: users_) {
+			if (it.second.getLogin() == loggedUser_) {
+				continue;
+			}
+			std::string userMessages{ TEMP_DIR + "/messages-" + it.second.getLogin() + ".txt" }; 
+			newMessage->save(userMessages);
+		}
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not write message to temporary file for futher transfer (" << e.what() << ")" << std::endl;
+		printPrompt();
+	}
+	fs::remove(MESSAGE_LOCK);
 }
 
 void ChatServer::listActiveUsers() {
@@ -386,10 +484,18 @@ void ChatServer::work() {
 		startConsole();
 	}
 	else {
+		int clientPid;
 		while (mainLoopActive_) {
 			socklen_t length = sizeof(client_);
-			connection_ = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
-			int clientPid = fork();
+			try {
+				connection_ = accept(sockFd_, reinterpret_cast<sockaddr *>(&client_), &length);
+			}
+			catch (const std::out_of_range &e) {
+				clearPrompt();
+				std::cout << "Error: out of range while trying to call accept() (" << e.what() << ')' << std::endl;
+				printPrompt();
+			}
+			clientPid = fork();
 			if (clientPid == 0) {
 				processNewClient();
 			}
@@ -538,7 +644,11 @@ void ChatServer::processNewClient() {
 
 	fd_set rfds;
 	while (true) {
-		try {
+		try {	
+			if (!loggedUser_.empty()) {
+				checkUnreadMessages();
+			}
+
 			int bytes;
 			struct timeval tv;
 			tv.tv_sec = 0;
@@ -603,17 +713,8 @@ void ChatServer::processNewClient() {
 			}
 			else if (!loggedUser_.empty()) {
 				// if there is an authorized user, we send a message
-				//sendMessage(inputText);
-			}
-			else {
-				std::cout << 
-					"the command is not recognized, \n"
-					"to output help, type /help\n" 
-				<< std::endl;
-			}
-			if (!loggedUser_.empty()) {
-				checkUnreadMessages();
-			}
+				sendMessage();
+			}	
 		}
 		catch (std::invalid_argument e) {
 			// exception handling
@@ -623,22 +724,36 @@ void ChatServer::processNewClient() {
 	cleanExit();
 }
 
-void ChatServer::checkUnreadMessages() {
-	for (int i = 0; i < messages_.size(); ++i) {
-		messages_[i]->printIfUnreadByUser(users_.at(loggedUser_).getLogin());
+void ChatServer::checkUnreadMessages() {	
+	while (fs::exists(MESSAGE_LOCK)) {
+		sleep(1);
 	}
+	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
+	if (!lock.is_open()) {
+		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
+	}
+	lock.close();
+	std::string userMessages{ TEMP_DIR + "/messages-" + loggedUser_ + ".txt" }; 
+	loadMessages(userMessages);
+	fs::remove(userMessages);
+
+	for (const auto &message: messages_) {
+		strcpy(message_, message->createTransferString().c_str());
+		write(connection_, message_, MESSAGE_LENGTH);
+	}
+	fs::remove(MESSAGE_LOCK);
 }
 
 void ChatServer::saveMessages() const {	
-	std::cout << "Saving chat history to file " << MESSAGES_LOG << "..." << std::endl;
-	std::ofstream file(MESSAGES_LOG, std::ios::out | std::ios::trunc);
+	std::cout << "Saving chat history to file " << HISTORY_LOG << "..." << std::endl;
+	std::ofstream file(HISTORY_LOG, std::ios::out | std::ios::trunc);
 	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + MESSAGES_LOG + " for write" };
+		throw std::runtime_error{ "Cannot open file " + HISTORY_LOG + " for write" };
 	}
 	file.close();
 
 	for (const auto &msg: messages_) {
-		msg->save(MESSAGES_LOG);		
+		msg->save(HISTORY_LOG);		
 	}
 }
 
@@ -700,10 +815,20 @@ void ChatServer::saveUsers() const {
 	fs::remove(USERLIST_LOCK);
 }
 
-void ChatServer::loadMessages() {
-	std::ifstream file(MESSAGES_LOG, std::ios::in);
+void ChatServer::loadMessages(const std::string &filename) {
+	if (!messages_.empty()) {
+		for(auto &message: messages_) {
+			message.reset();
+		}
+		messages_.clear();
+	}
+	if(!fs::exists(filename)) {
+		return;
+	}
+
+	std::ifstream file(filename, std::ios::in);
 	if (!file.is_open()) {
-		throw std::runtime_error{ "Error: cannot open file " + MESSAGES_LOG + " for read" };
+		throw std::runtime_error{ "Error: cannot open file " + filename + " for read" };
 	}
 	while (!file.eof()) {
 		std::string message_type;

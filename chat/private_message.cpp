@@ -43,3 +43,6 @@ void PrivateMessage::save(const std::string &filename) const {
 	file.close();
 }
 
+std::string PrivateMessage::createTransferString() const {
+	return std::string{ "PRIVATE\n" } + sender_ + "\n" + text_ + "\n";
+}
