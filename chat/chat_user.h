@@ -12,10 +12,15 @@ public:
 	const std::string& getLogin() const;
 	const std::string& getPassword() const;
 	const std::string& getName() const;
+	bool isLoggedIn() const;
+	void login();
+	void logout();
 	void save(const std::string &filename) const;
 
 private:
 	std::string login_;
 	std::string password_;
 	std::string name_;
+	bool isLoggedIn_;
 };
+

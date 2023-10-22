@@ -23,8 +23,10 @@ public:
 	// save message to file
 	void save(const std::string &filename) const override;
 
+	// pack string with message information for transferring it through a network
+	std::string createTransferString() const override;
+
 private:
-	std::vector<std::string> split(const std::string &, const std::string &) const;
 
 	std::map<std::string, ChatUser> users_unread_;
 };
