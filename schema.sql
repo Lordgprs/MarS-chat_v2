@@ -1,0 +1,48 @@
+DROP TABLE IF EXISTS `messages`;
+DROP TABLE IF EXISTS `users_log`;
+DROP TABLE IF EXISTS `users`;
+
+CREATE TABLE `users` (
+	`id` BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+	`login` VARCHAR(200) NOT NULL,
+	`name` VARCHAR(200) NOT NULL,
+	`password_hash` VARCHAR(200) NOT NULL,
+	`last_login` TIMESTAMP,
+	`active` BOOLEAN NOT NULL DEFAULT FALSE,
+	UNIQUE(`login`)
+);
+
+CREATE TABLE `messages` (
+	`id` BIGINT NOT NULL PRIMARY KEY,
+	`type` VARCHAR(10),
+	`sender` BIGINT NOT NULL,
+	`receiver` BIGINT,
+	`text` TEXT NOT NULL,
+	`sent` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CHECK(`type` IN ('BROADCAST', 'PRIVATE')),
+	FOREIGN KEY (`sender`)
+		REFERENCES `users`(`id`)
+		ON DELETE CASCADE
+		ON UPDATE CASCADE,
+	FOREIGN KEY (`receiver`)
+		REFERENCES `users`(`id`)
+		ON DELETE CASCADE
+		ON UPDATE CASCADE
+);
+
+CREATE TABLE `messages_read` (
+	`message_id` BIGINT NOT NULL,
+	`user_id` BIGINT NOT NULL,
+	`read` BOOLEAN NOT NULL DEFAULT FALSE,
+	UNIQUE(`message_id`, `user_id`),
+	FOREIGN KEY (`user_id`)
+		REFERENCES `users`(`id`)
+		ON DELETE CASCADE
+		ON UPDATE CASCADE,
+	FOREIGN KEY (`message_id`)
+		REFERENCES `messages`(`id`)
+		ON DELETE CASCADE
+		ON UPDATE CASCADE
+);
+
+
