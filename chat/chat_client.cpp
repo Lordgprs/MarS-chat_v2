@@ -88,7 +88,7 @@ bool ChatClient::isLoginAvailable(const std::string& login) const {
 }
 
 void ChatClient::signUp() {
-	if (loggedUser_ != nullptr) {
+	if (!loggedUser_.empty()) {
 		std::cout << "To register a new account, enter /logout first.\n" << std::endl;
 		return;
 	}
@@ -142,7 +142,7 @@ bool ChatClient::isValidLogin(const std::string& login) const {
 }
 
 void ChatClient::signIn() {
-	if (loggedUser_ != nullptr) {
+	if (!loggedUser_.empty()) {
 		std::cout << "For log in you must sign out first. Enter '/logout' to sign out\n" << std::endl;
 		return;
 	}
@@ -163,10 +163,12 @@ void ChatClient::signIn() {
 		std::cout << "Login successful" << std::endl;
 		auto tokens = Chat::split(std::string{ message_ }, ":");
 		std::string name;
+		unsigned user_id;
 		if (tokens.size() >= 3) {
 			name = tokens[2];
+			user_id = std::stoi(tokens[3]);
 		}
-		loggedUser_ = make_shared<ChatUser>(login, password, name);
+		loggedUser_ = login;
 		startPoller();
 	}
 	else if (strncmp(message_, "/response:loggedin", 18) == 0) {
@@ -199,7 +201,7 @@ void ChatClient::startPoller() {
 		clearPrompt();
 		std::cout << tokens[1] << ": ";
 		if (tokens[0] == "PRIVATE") {
-			std::cout << '@' << loggedUser_->getLogin() << ' ';
+			std::cout << '@' << loggedUser_ << ' ';
 		}
 		std::cout << tokens[2] << std::endl;
 		printPrompt();
@@ -248,19 +250,19 @@ bool ChatClient::readResponseFromFile() const {
 }
 
 void ChatClient::signOut() {
-	if (loggedUser_ == nullptr) {
+	if (loggedUser_.empty()) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
 	}
 
 	strcpy(message_, "/logout");
 	sendRequest();
-	loggedUser_.reset();
+	loggedUser_.clear();
 	kill(pollerPid_, SIGTERM);
 }
 
-void ChatClient::removeUser(ChatUser& user) {
-	if (loggedUser_ == nullptr) {
+void ChatClient::removeUser() {
+	if (loggedUser_.empty()) {
 		std::cout << "You are not logged in\n" << std::endl;
 		return;
 	}
@@ -274,7 +276,7 @@ void ChatClient::removeUser(ChatUser& user) {
 	}
 	else {
 		std::cout << "User removed successfully\n" << std::endl;
-		loggedUser_.reset();
+		loggedUser_.clear();
 	}
 }
 
@@ -310,7 +312,7 @@ ssize_t ChatClient::receiveResponse() const {
 }
 
 void ChatClient::printPrompt() const {
-	std::cout << (loggedUser_ ? loggedUser_->getLogin() : "") << "> ";
+	std::cout << loggedUser_ << "> ";
 	std::cout.flush();
 }
 
@@ -340,11 +342,11 @@ void ChatClient::work() {
 			}
 			else if (strncmp(message_, "/remove", 7) == 0) {
 				// removing current user
-				if (loggedUser_) {
-					removeUser(*loggedUser_);
+				if (!loggedUser_.empty()) {
+					removeUser();
 				}
 			}
-			else if (loggedUser_ && *message_ != '/') {
+			else if (!loggedUser_.empty() && *message_ != '/') {
 				sendRequest();
 			}
 			else if (

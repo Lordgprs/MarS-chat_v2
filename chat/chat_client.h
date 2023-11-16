@@ -1,5 +1,4 @@
 #pragma once
-#include "chat_user.h"
 #include "config_file.h"
 
 #include <cstdlib>
@@ -39,11 +38,11 @@ private:
 	bool isValidLogin(const std::string& login) const; // login verification
 	void signIn(); // authorization
 	void signOut(); // user logout
-	void removeUser(ChatUser& user); // deleting a user
+	void removeUser(); // deleting a user
 	ssize_t sendRequest() const; // sending a message
 	ssize_t receiveResponse() const; // receiving a response
-	void sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText); // sending a private message
-	void sendBroadcastMessage(ChatUser& sender, const std::string& message); // sending a shared message
+	void sendPrivateMessage(const std::string &senderName, const std::string& receiverName, const std::string& messageText); // sending a private message
+	void sendBroadcastMessage(const std::string &senderName, const std::string& message); // sending a shared message
 	void printSystemInformation() const; // print information about process and OS
 	void printPrompt() const;
 	void writeResponseToFile() const;
@@ -65,7 +64,7 @@ private:
 	std::string getLiteralOSName(OSVERSIONINFOEX &osv) const; // Get literal version, i.e. 5.0 is Windows 2000
 #endif
 
-	std::shared_ptr<ChatUser> loggedUser_{ nullptr };
+	std::string loggedUser_;
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
 	pid_t mainPid_;

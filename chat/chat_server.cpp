@@ -7,9 +7,12 @@
 #include <fstream>
 #include <filesystem>
 #if defined(__linux__)
-#include <sys/utsname.h>
-#include <errno.h>
-#include <sys/select.h>
+extern "C" {
+	#include <sys/utsname.h>
+	#include <errno.h>
+	#include <sys/select.h>
+	#include <cstdlib>
+}
 #elif defined(_WIN64) or defined(_WIN32)
 #pragma comment(lib, "ntdll")
 
@@ -36,6 +39,7 @@ ChatServer::ChatServer() {
 	fs::current_path(".");
 	try {
 		loadUsers();
+		setUsersInactive();
 	}
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
@@ -87,6 +91,12 @@ ChatServer::ChatServer() {
 
 	std::cout << "\n\nServer has been started and listening port TCP/" << config_["ListenPort"] << std::endl;
 	printPrompt();
+}
+
+void ChatServer::setUsersInactive() const {
+	Mysql mysql;
+	mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+	mysql.query("UPDATE `users` SET `active` = FALSE");
 }
 
 // destructor
@@ -141,37 +151,51 @@ void ChatServer::signUp() {
 
 		return;
 	}
-	
-	SHA256 sha;
-	sha.update(tokens[2]);
-	uint8_t *digest = sha.digest();
-	hash = SHA256::toString(digest);
-	delete[] digest;
-
-	users_.emplace(tokens[1], ChatUser(tokens[1], hash, tokens[3]));
-	strcpy(message_, "/response:success");
-	auto bytes = write(connection_, message_, MESSAGE_LENGTH);
-	clearPrompt();
-	std::cout << "User '" << tokens[1] << "' has bin registered" << std::endl;
-	printPrompt();
 	try {
-		while(fs::exists(USERLIST_LOCK)) {
-			sleep(1);
-		}
-		std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
-		if (!lock.is_open()) {
-			throw std::runtime_error{ "Error: can not create userlist lock file!" };
-		}
-		lock.close();
+		Mysql mysql;
 		try {
-			users_.at(tokens[1]).save(USER_CONFIG);
-		}
-		catch (const std::out_of_range &e) {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			mysql.query("SELECT COALESCE (MAX(`id`), -1) FROM `users`");
+			auto rows = mysql.fetchAll();
+			int new_id{ std::stoi(rows.front().at(0)) };
+			++new_id;
+	
+			SHA256 sha;
+			sha.update(tokens[2]);
+			uint8_t *digest = sha.digest();
+			hash = SHA256::toString(digest);
+			delete[] digest;
+
+			users_.emplace(tokens[1], ChatUser(new_id, tokens[1], hash, tokens[3]));
+			strcpy(message_, "/response:success");
+			auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 			clearPrompt();
-			std::cout << "Error: can not save user information to file (" << e.what() << std::endl;
+			std::cout << "User '" << tokens[1] << "' has bin registered" << std::endl;
+			printPrompt();
+			users_.at(tokens[1]).save(mysql);
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
 			printPrompt();
 		}
-		fs::remove(USERLIST_LOCK);
+		//while(fs::exists(USERLIST_LOCK)) {
+		//	sleep(1);
+		//}
+		//std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
+		//if (!lock.is_open()) {
+		//	throw std::runtime_error{ "Error: can not create userlist lock file!" };
+		//}
+		//lock.close();
+		//try {
+		//	users_.at(tokens[1]).save(USER_CONFIG);
+		//}
+		//catch (const std::out_of_range &e) {
+		//	clearPrompt();
+		//	std::cout << "Error: can not save user information to file (" << e.what() << std::endl;
+		//	printPrompt();
+		//}
+		//fs::remove(USERLIST_LOCK);
 	}
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
@@ -233,6 +257,8 @@ void ChatServer::signIn() {
 		std::cout << "User " << std::quoted(it->second.getLogin()) << " successfully logged in" << std::endl;
 		strcpy(message_, "/response:success:");
 		strcat(message_, it->second.getName().c_str());
+		strcat(message_, ":");
+		strcat(message_, std::to_string(it->second.getUserId()).c_str());
 		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		loggedUser_ = login;
 		writeUserFile();
@@ -769,7 +795,21 @@ void ChatServer::saveMessages() const {
 }
 
 void ChatServer::loadUsers() {
-	while (fs::exists(USERLIST_LOCK)) {
+	Mysql mysql;
+	mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+	if (!mysql.query("SELECT `id`, `login`, `name`, `password_hash` FROM `users` ORDER BY `id`")) {
+		std::stringstream ss;
+		ss << "MySQL error: " << mysql.getError() << std::endl;
+		throw std::runtime_error{ ss.str() };
+	}
+	auto users_list = mysql.fetchAll();
+	users_.clear();
+	for (auto &user_data: users_list) {
+		users_.emplace(user_data[1], ChatUser(std::stoi(user_data[0]), user_data[1], user_data[2], user_data[3]));
+	}
+
+
+	/*while (fs::exists(USERLIST_LOCK)) {
 		sleep(1);
 	}
 	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
@@ -796,31 +836,29 @@ void ChatServer::loadUsers() {
 		}
 	}
 	file.close();
-	fs::remove(USERLIST_LOCK);
+	fs::remove(USERLIST_LOCK);*/
 }
 
 void ChatServer::saveUsers() const {
-	while (fs::exists(USERLIST_LOCK)) {
-		sleep(1);
+	try {
+		Mysql mysql;
+		try {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			for (auto it = users_.begin(); it != users_.end(); ++it) {
+				it->second.save(mysql);		
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
-	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
-	lock.close();
-
-	std::ofstream file(USER_CONFIG, std::ios::out | std::ios::trunc);
-	if (!file.is_open()) {
-		fs::remove(USERLIST_LOCK);
-		throw std::runtime_error{ "Cannot open file " + USER_CONFIG + " for write" };
-	}
-	file.close();
-
-	for (auto it = users_.begin(); it != users_.end(); ++it) {
-		it->second.save(USER_CONFIG);		
-	}
-	
-	fs::remove(USERLIST_LOCK);
 }
 
 void ChatServer::loadMessages(const std::string &filename) {

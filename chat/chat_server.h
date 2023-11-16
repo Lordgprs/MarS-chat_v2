@@ -1,4 +1,6 @@
 #pragma once
+
+#include "mysql.h"
 #include "chat_user.h"
 #include "chat_message.h"
 #include "broadcast_message.h"
@@ -21,12 +23,14 @@ struct WindowsVersion {
 	unsigned major, minor, build;
 };
 #elif defined(__linux__)
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+extern "C" {
+	#include <unistd.h>
+	#include <sys/socket.h>
+	#include <sys/types.h>
+	#include <sys/wait.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+}
 #endif
 
 class ChatServer final {
@@ -53,6 +57,7 @@ private:
 	void saveUsers() const;
 	void saveMessages() const; // save all messages to file
 	void loadUsers(); // load user list from file
+	void setUsersInactive() const;
 	void loadMessages(const std::string &filename); // load message list from file
 	void printSystemInformation() const; // print information about process and OS
 	void printPrompt() const;
@@ -103,6 +108,7 @@ private:
 	mutable char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
 	int connection_;
+	Mysql mysql_;
 };
 
 struct ClientInformation {
