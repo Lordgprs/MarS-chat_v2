@@ -96,7 +96,7 @@ ChatServer::ChatServer() {
 void ChatServer::setUsersInactive() const {
 	Mysql mysql;
 	mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
-	mysql.query("UPDATE `users` SET `active` = FALSE");
+	mysql.query("DELETE FROM active_sessions");
 }
 
 // destructor
@@ -261,12 +261,12 @@ void ChatServer::signIn() {
 		strcat(message_, std::to_string(it->second.getUserId()).c_str());
 		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		loggedUser_ = login;
-		writeUserFile();
+		writeSessionInfo();
 	}
 	printPrompt();
 }
 
-void ChatServer::writeUserFile() const {
+void ChatServer::writeSessionInfo() const {
 	if (loggedUser_.empty()) {
 		clearPrompt();
 		std::cout << "Error: trying to save user information without login" << std::endl;
@@ -274,51 +274,60 @@ void ChatServer::writeUserFile() const {
 		return;
 	}
 
-	const std::string USER_LOCK { USERS_DIR + "/" + loggedUser_ + ".lock" };
-	const std::string USER_INFO { USERS_DIR + "/" + loggedUser_ + ".info" };
-	while(fs::exists(USER_LOCK)) {
-		sleep(1);
-	}
+	try {
+		Mysql mysql;
+		try {
+			std::stringstream ss;
 
-	std::ofstream lock{ USER_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open user lock file for writing" };
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			ss << "DELETE FROM `active_sessions` WHERE `user_id` = " << users_.at(loggedUser_).getUserId();
+			mysql.query(ss.str());
+			ss.str(std::string{});
+			ss << 
+				"INSERT INTO `active_sessions` (`user_id`, `ip`, `port`) VALUES (" <<
+				users_.at(loggedUser_).getUserId() <<
+				", INET_ATON('" << getClientIp() << "'), "
+				<< getClientPort() << ")";
+			mysql.query(ss.str());
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
-	lock.close();
-	std::ofstream userInfo{ USER_INFO };
-	if (!userInfo.is_open()) {
-		fs::remove(USER_LOCK);
-		throw std::runtime_error{ "Error: can not open user information file for writing" };
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cerr << "Error: cannot connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
-	userInfo <<
-		"Username = " << loggedUser_ << '\n' <<
-		"Pid = " << getpid() << '\n' <<
-		"Address = " << getClientIpAndPort() << std::endl; 
-	userInfo.close();
-
-	fs::remove(USER_LOCK);
 }
 
-void ChatServer::removeUserFile(const std::string &username) const {
+void ChatServer::removeSessionInfo(const std::string &username) const {
 	if (username.empty()) {
 		throw std::runtime_error { "Failed to remove user file without correct username" };
 	}
 
-	const std::string USER_LOCK { USERS_DIR + "/" + username + ".lock" };
-	const std::string USER_INFO { USERS_DIR + "/" + username + ".info" };
-	while(fs::exists(USER_LOCK)) {
-		sleep(1);
-	}
+	try {
+		Mysql mysql;
+		try {
+			std::stringstream ss;
 
-	std::ofstream lock{ USER_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open user lock file for writing" };
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			ss << "DELETE FROM `active_sessions` WHERE `user_id` = " << users_.at(username).getUserId();
+			mysql.query(ss.str());
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not remove user session from database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
-	lock.close();
-	if (fs::exists(USER_INFO)) {
-		fs::remove(USER_INFO);
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cerr << "Error: cannot connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
-	fs::remove(USER_LOCK);
 }
 
 void ChatServer::signOut() {
@@ -333,7 +342,7 @@ void ChatServer::signOut() {
 		std::cout << "Error: can not log out (" << e.what() << std::endl;
 		printPrompt();
 	}
-	removeUserFile(loggedUser_);
+	removeSessionInfo(loggedUser_);
 	loggedUser_.clear();
 }
 
@@ -414,7 +423,24 @@ void ChatServer::sendMessage() {
 }
 
 void ChatServer::writeMessageToHistory(const std::shared_ptr<ChatMessage> message) const {
-	while (fs::exists(HISTORY_LOCK)) {
+	try {
+		Mysql mysql;
+		try {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			message->save(mysql);
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save message to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
+	}
+/*	while (fs::exists(HISTORY_LOCK)) {
 		sleep(1);
 	}
 	std::ofstream lock{ HISTORY_LOCK, std::ios::out | std::ios::trunc };
@@ -430,7 +456,7 @@ void ChatServer::writeMessageToHistory(const std::shared_ptr<ChatMessage> messag
 		printPrompt();
 	}
 	lock.close();
-	fs::remove(HISTORY_LOCK);	
+	fs::remove(HISTORY_LOCK);	*/
 }
 
 void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
@@ -519,7 +545,7 @@ void ChatServer::kickClient(const std::string &cmd) {
 		if (user["Username"] == tokens[1]) {
 			kill(stoi(user["Pid"]), SIGTERM);
 			users_.at(tokens[1]).logout();
-			removeUserFile(tokens[1]);
+			removeSessionInfo(tokens[1]);
 		}
 	}
 }
@@ -641,7 +667,7 @@ void ChatServer::childDeathHandler(int signum) {
 			updateActiveUsers();
 			for (const auto &user: activeUsers_) {
 				if (stoi(user["Pid"]) == pid) {
-					removeUserFile(user["Username"]);
+					removeSessionInfo(user["Username"]);
 				}
 			}
 			auto it = children_.find(pid);
@@ -924,8 +950,15 @@ void ChatServer::clearPrompt() const {
 }
 
 std::string ChatServer::getClientIpAndPort() const {
-	std::string result;
-	return (result + inet_ntoa(client_.sin_addr) + ":" + std::to_string(ntohs(client_.sin_port)));
+	return getClientIp() + ":" + getClientPort();
+}
+
+std::string ChatServer::getClientIp() const {
+	return std::string{ inet_ntoa(client_.sin_addr) };
+}
+
+std::string ChatServer::getClientPort() const {
+	return std::to_string(ntohs(client_.sin_port));
 }
 
 void ChatServer::removeUserFromFile(const std::string &removedUser) {

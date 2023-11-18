@@ -69,10 +69,12 @@ private:
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
+	std::string getClientIp() const;
+	std::string getClientPort() const;
 	void removeUserFromFile(const std::string &);
 	void displayHelp() const;
-	void writeUserFile() const;
-	void removeUserFile(const std::string &username) const;
+	void writeSessionInfo() const;
+	void removeSessionInfo(const std::string &username) const;
 	void updateActiveUsers();
 	void listActiveUsers();
 	void kickClient(const std::string &cmd);

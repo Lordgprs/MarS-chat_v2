@@ -19,6 +19,9 @@ S_SRC = \
 C_TARGET = $(BINDIR)/chat
 S_TARGET = $(BINDIR)/chat_server
 PREFIX = /usr/local/bin
+CONFIG_DIR = /etc
+CLIENT_CONFIG_FILE = client.cfg
+SERVER_CONFIG_FILE = server.cfg
 INCLUDES = /usr/include/mysql
 LIB = -lmysqlclient
 STD = c++20
@@ -39,8 +42,12 @@ clean:
 
 install:
 	install $(C_TARGET) $(PREFIX)
+	install $(CLIENT_CONFIG_FILE) $(CONFIG_DIR)
 	install $(S_TARGET) $(PREFIX)
+	install $(SERVER_CONFIG_FILE) $(CONFIG_DIR)
 
 uninstall:
 	rm -rf $(PREFIX)/$(C_TARGET)
+	rm -rf $(CONFIG_DIR)/$(CLIENT_CONFIG_FILE)
 	rm -rf $(PREFIX)/$(S_TARGET)
+	rm -rf $(CONFIG_DIR)/$(SERVER_CONFIG_FILE)

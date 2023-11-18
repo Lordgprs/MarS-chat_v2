@@ -77,6 +77,49 @@ void BroadcastMessage::save(const std::string &filename) const {
 	file.close();
 }
 
+void BroadcastMessage::save(Mysql &mysql) const {
+	std::stringstream ss;
+	mysql.query("SELECT COALESCE(max(`id`), -1) FROM `messages`");
+	auto rows = mysql.fetchAll();
+	unsigned new_id = std::stoi(rows.front().at(0)) + 1;
+	ss << "INSERT INTO `messages` (`id`, `type`, `sender`, `receiver`, `text`) VALUES (" <<
+		new_id << ", 'BROADCAST', "
+		"(SELECT `id` FROM `users` WHERE `login` = '" << sender_ << "'), "
+		", '" << text_ << "')";
+	mysql.query(ss.str());
+	
+	for (auto it: users_unread_) {
+		ss.str(std::string{});
+		ss << "INSERT INTO `unread_messages` (`message_id`, `user_id`) "
+			"VALUES (" << new_id << ", "
+			"(SELECT `id` FROM `users` WHERE `login` = '" << sender_ << "'))";
+	}
+	
+	/*std::ofstream file;
+	if (!fs::exists(filename)) {
+		file.open(filename, std::ios::out | std::ios::trunc);
+	}
+	else {
+		file.open(filename, std::ios::app);
+	}
+	if (!file.is_open()) {
+		throw std::runtime_error{ "Error: cannot open file" + filename + " for append" };
+	}
+	file << "BROADCAST\n"
+		<< sender_ << '\n';
+	auto size = users_unread_.size();
+	size_t i = 0;
+	for (auto it = users_unread_.begin(); it != users_unread_.end(); ++it) {
+		file << it->first;
+		if (i < size - 1) {
+			file << ',';
+		}
+		++i;
+	}
+	file << '\n' << text_ << std::endl;
+	file.close();*/
+}
+
 std::string BroadcastMessage::createTransferString() const {
 	return std::string{ "BROADCAST\n" } + sender_ + "\n" + text_ + "\n";
 }

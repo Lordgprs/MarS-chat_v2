@@ -20,8 +20,11 @@ public:
 	// check if message is read
 	bool isRead() const override;
   
+	// save message to database
+	void save(Mysql &mysql) const override;
+	
 	// save message to file
-	void save(const std::string &filename) const override;
+	void save(const std::string&) const override;
 
 	// pack string with message information for transferring it through a network
 	std::string createTransferString() const override;
