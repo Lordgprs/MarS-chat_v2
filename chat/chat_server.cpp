@@ -7,11 +7,11 @@
 #include <fstream>
 #include <filesystem>
 #if defined(__linux__)
+#include <cstdlib>
 extern "C" {
 	#include <sys/utsname.h>
 	#include <errno.h>
 	#include <sys/select.h>
-	#include <cstdlib>
 }
 #elif defined(_WIN64) or defined(_WIN32)
 #pragma comment(lib, "ntdll")
@@ -35,8 +35,6 @@ ChatServer::ChatServer() {
 		};
 	}
 	fs::create_directory(TEMP_DIR);
-	fs::create_directory(USERS_DIR);
-	fs::current_path(".");
 	try {
 		loadUsers();
 		setUsersInactive();
@@ -45,15 +43,6 @@ ChatServer::ChatServer() {
 		std::cerr << e.what() << std::endl;
 	}
 
-	// We don't want to load message history at startup
-	// try {
-	//	loadMessages(HISTORY_LOG);
-	// }
-	// catch (const std::runtime_error &e) {
-	// 	std::cerr << e.what() << std::endl;
-	// }
-
-	
 	sockFd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sockFd_ == -1) {
 		throw std::runtime_error{ "Error while creating socket!" };
@@ -170,7 +159,7 @@ void ChatServer::signUp() {
 			strcpy(message_, "/response:success");
 			auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 			clearPrompt();
-			std::cout << "User '" << tokens[1] << "' has bin registered" << std::endl;
+			std::cout << "User '" << tokens[1] << "' has been registered" << std::endl;
 			printPrompt();
 			users_.at(tokens[1]).save(mysql);
 		}
@@ -179,23 +168,6 @@ void ChatServer::signUp() {
 			std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
 			printPrompt();
 		}
-		//while(fs::exists(USERLIST_LOCK)) {
-		//	sleep(1);
-		//}
-		//std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
-		//if (!lock.is_open()) {
-		//	throw std::runtime_error{ "Error: can not create userlist lock file!" };
-		//}
-		//lock.close();
-		//try {
-		//	users_.at(tokens[1]).save(USER_CONFIG);
-		//}
-		//catch (const std::out_of_range &e) {
-		//	clearPrompt();
-		//	std::cout << "Error: can not save user information to file (" << e.what() << std::endl;
-		//	printPrompt();
-		//}
-		//fs::remove(USERLIST_LOCK);
 	}
 	catch (const std::runtime_error &e) {
 		std::cerr << e.what() << std::endl;
@@ -218,6 +190,7 @@ void ChatServer::signIn() {
 		return;
 	}
 
+	loadUsers();
 	std::string login, password, hash;
 	
 	auto tokens = Chat::split(message_, ":");
@@ -252,69 +225,43 @@ void ChatServer::signIn() {
 			return;
 		}
 
-		it->second.login();
+		try {
+			Mysql mysql;
+			try {
+				mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+				users_.at(login).login(mysql, getClientIp(), getClientPort(), getpid());
+			}
+			catch (const std::runtime_error &e) {
+				clearPrompt();
+				std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
+				printPrompt();
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 		clearPrompt();
-		std::cout << "User " << std::quoted(it->second.getLogin()) << " successfully logged in" << std::endl;
+		std::cout << "User " << std::quoted(login) << " successfully logged in" << std::endl;
 		strcpy(message_, "/response:success:");
-		strcat(message_, it->second.getName().c_str());
+		strcat(message_, users_.at(login).getName().c_str());
 		strcat(message_, ":");
-		strcat(message_, std::to_string(it->second.getUserId()).c_str());
+		strcat(message_, std::to_string(users_.at(login).getUserId()).c_str());
 		auto bytes = write(connection_, message_, MESSAGE_LENGTH);
 		loggedUser_ = login;
-		writeSessionInfo();
 	}
 	printPrompt();
 }
 
-void ChatServer::writeSessionInfo() const {
-	if (loggedUser_.empty()) {
-		clearPrompt();
-		std::cout << "Error: trying to save user information without login" << std::endl;
-		printPrompt();
-		return;
-	}
-
+void ChatServer::removeSessionByPid(const pid_t pid) const {
 	try {
 		Mysql mysql;
 		try {
 			std::stringstream ss;
 
 			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
-			ss << "DELETE FROM `active_sessions` WHERE `user_id` = " << users_.at(loggedUser_).getUserId();
-			mysql.query(ss.str());
-			ss.str(std::string{});
-			ss << 
-				"INSERT INTO `active_sessions` (`user_id`, `ip`, `port`) VALUES (" <<
-				users_.at(loggedUser_).getUserId() <<
-				", INET_ATON('" << getClientIp() << "'), "
-				<< getClientPort() << ")";
-			mysql.query(ss.str());
-		}
-		catch (const std::runtime_error &e) {
-			clearPrompt();
-			std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
-			printPrompt();
-		}
-	}
-	catch (const std::runtime_error &e) {
-		clearPrompt();
-		std::cerr << "Error: cannot connect to database (" << e.what() << ")" << std::endl;
-		printPrompt();
-	}
-}
-
-void ChatServer::removeSessionInfo(const std::string &username) const {
-	if (username.empty()) {
-		throw std::runtime_error { "Failed to remove user file without correct username" };
-	}
-
-	try {
-		Mysql mysql;
-		try {
-			std::stringstream ss;
-
-			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
-			ss << "DELETE FROM `active_sessions` WHERE `user_id` = " << users_.at(username).getUserId();
+			ss << "DELETE FROM `active_sessions` WHERE `pid` = " << pid;
 			mysql.query(ss.str());
 		}
 		catch (const std::runtime_error &e) {
@@ -335,14 +282,29 @@ void ChatServer::signOut() {
 	std::cout << "User '" << loggedUser_ << "' logged out at " << getClientIpAndPort() << std::endl;
 	printPrompt();
 	try {
-		users_.at(loggedUser_).logout();
+		try {
+			Mysql mysql;
+            try {
+				mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+				users_.at(loggedUser_).logout(mysql);
+			}
+			catch (const std::runtime_error &e) {
+                clearPrompt();
+                std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
+                printPrompt();
+            }
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
 	catch (const std::out_of_range &e) {
 		clearPrompt();
 		std::cout << "Error: can not log out (" << e.what() << std::endl;
 		printPrompt();
 	}
-	removeSessionInfo(loggedUser_);
 	loggedUser_.clear();
 }
 
@@ -365,7 +327,7 @@ void ChatServer::removeUser(const std::string &cmd) {
 	
 	clearPrompt();
 	std::cout << "Removing user " << std::quoted(removingUser) << std::endl;
-	removeUserFromFile(removingUser);	
+	removeUserFromDb(removingUser);	
 }
 
 void ChatServer::removeUser() {
@@ -376,10 +338,10 @@ void ChatServer::removeUser() {
 		return;
 	}
 		
-	strcpy(message_, "/response:success-test");
+	strcpy(message_, "/response:success");
 	write(connection_, message_, MESSAGE_LENGTH);
 	signOut();
-	removeUserFromFile(removingUser);
+	removeUserFromDb(removingUser);
 	loggedUser_.clear();
 	clearPrompt();
 	std::cout << "User " << std::quoted(removingUser) << " has been removed" << std::endl;
@@ -393,6 +355,32 @@ void ChatServer::sendMessage() {
 		return;
 	}
 
+	loadUsers();
+	try {
+		Mysql mysql;
+		try {
+			std::stringstream ss;
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			ss << "UPDATE `active_sessions` SET `last_activity` = CURRENT_TIMESTAMP WHERE "
+				"`user_id` = " << users_.at(loggedUser_).getUserId();
+			if (!mysql.query(ss.str())) {
+				ss.str(std::string{});
+				ss << "MySQL error: " << mysql.getError();
+				throw std::runtime_error{ ss.str() };
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save message to database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
+	}
+	
 	if (message[0] == '@') {
 		size_t pos = message.find(' ');
 		if (pos != std::string::npos) {
@@ -422,16 +410,22 @@ void ChatServer::sendMessage() {
 	}
 }
 
-void ChatServer::writeMessageToHistory(const std::shared_ptr<ChatMessage> message) const {
+void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
+	if (users_.find(receiverName) == users_.end()) {
+		throw std::invalid_argument("RECEIVER_DOES_NOT_EXIST");
+	}
+
+	auto newMessage = std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText);
+	
 	try {
 		Mysql mysql;
 		try {
 			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
-			message->save(mysql);
+			newMessage->save(mysql);
 		}
 		catch (const std::runtime_error &e) {
 			clearPrompt();
-			std::cout << "Error: can not save message to database (" << e.what() << ")" << std::endl;
+			std::cout << "Error: can not save massage to database (" << e.what() << ")" << std::endl;
 			printPrompt();
 		}
 	}
@@ -440,90 +434,63 @@ void ChatServer::writeMessageToHistory(const std::shared_ptr<ChatMessage> messag
 		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
 		printPrompt();
 	}
-/*	while (fs::exists(HISTORY_LOCK)) {
-		sleep(1);
-	}
-	std::ofstream lock{ HISTORY_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open history lock file for writing" };
-	}
-	try {
-		message->save(HISTORY_LOG);
-	}
-	catch (const std::runtime_error &e) {
-		clearPrompt();
-		std::cout << "Error: can not write message to history log (" << e.what() << ")" << std::endl;
-		printPrompt();
-	}
-	lock.close();
-	fs::remove(HISTORY_LOCK);	*/
-}
-
-void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receiverName, const std::string& messageText) {
-	if (users_.find(receiverName) == users_.end()) {
-		throw std::invalid_argument("RECEIVER_DOES_NOT_EXIST");
-	}
-
-	auto newMessage = std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText);
-	writeMessageToHistory(newMessage);
-	
-	while (fs::exists(MESSAGE_LOCK)) {
-		sleep(1);
-	}
-	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
-	}
-	try {
-		std::string userMessages{ TEMP_DIR + "/messages-" + receiverName + ".txt" }; 
-		newMessage->save(userMessages);
-	}
-	catch (const std::runtime_error &e) {
-		clearPrompt();
-		std::cout << "Error: can not write message to temporary file for futher transfer (" << e.what() << ")" << std::endl;
-		printPrompt();
-	}
-	lock.close();
-	fs::remove(MESSAGE_LOCK);	
 }
 
 void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
 	// Dynamically allocate memory for new message
 	auto newMessage = std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_);
-	
-	writeMessageToHistory(newMessage);
-	
-	while (fs::exists(MESSAGE_LOCK)) {
-		sleep(1);
-	}
-	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
-	}
-	lock.close();
 	try {
-		for(const auto &it: users_) {
-			if (it.second.getLogin() == loggedUser_) {
-				continue;
-			}
-			std::string userMessages{ TEMP_DIR + "/messages-" + it.second.getLogin() + ".txt" }; 
-			newMessage->save(userMessages);
+		Mysql mysql;
+		try {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			newMessage->save(mysql);
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not save massage to database (" << e.what() << ")" << std::endl;
+			printPrompt();
 		}
 	}
 	catch (const std::runtime_error &e) {
 		clearPrompt();
-		std::cout << "Error: can not write message to temporary file for futher transfer (" << e.what() << ")" << std::endl;
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
 		printPrompt();
 	}
-	fs::remove(MESSAGE_LOCK);
 }
 
 void ChatServer::listActiveUsers() {
-	updateActiveUsers();
-	clearPrompt();
-	std::cout << "Active users:" << std::endl;
-	for (const auto &user: activeUsers_) {
-		std::cout << "Name: " << user["Username"] << "; Address: " << user["Address"] << "; Pid: " << user["Pid"] << std::endl;
+	try {
+		Mysql mysql;
+		try {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			mysql.query("SELECT "
+					"`users`.`login`, "
+					"INET_NTOA(`active_sessions`.`ip`), "
+					"`active_sessions`.`port`, "
+					"`active_sessions`.`pid`, "
+					"`active_sessions`.`session_start` "
+				"FROM "
+					"`active_sessions` "
+				"JOIN "
+					"`users` ON `users`.`id` = `active_sessions`.`user_id` "
+				"ORDER BY "
+					"session_start DESC "
+			);
+			auto rows = mysql.fetchAll();
+			for (const auto &row: rows) {
+				std::cout << "Login: " << std::setw(8) << row[0] << "; Address: " << std::setw(24) << (row[1] + ":" + row[2]) << "; Pid: " << std::setw(4) << row[3] << "; Started: " << row[4] << std::endl;
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not load active user list from database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
 	std::cout << std::endl;
 }
@@ -542,10 +509,25 @@ void ChatServer::kickClient(const std::string &cmd) {
 		throw std::invalid_argument{ "Error: user is not logged in" };
 	}
 	for (const auto &user: activeUsers_) {
-		if (user["Username"] == tokens[1]) {
-			kill(stoi(user["Pid"]), SIGTERM);
-			users_.at(tokens[1]).logout();
-			removeSessionInfo(tokens[1]);
+		if (user == tokens[1]) {
+			kill(users_.at(user).getPid(), SIGTERM);
+			try {
+				Mysql mysql;
+            	try {
+					mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+					users_.at(tokens[1]).logout(mysql);
+				}
+				catch (const std::runtime_error &e) {
+                	clearPrompt();
+                	std::cout << "Error: can not save user information to database (" << e.what() << ")" << std::endl;
+                	printPrompt();
+            	}
+			}
+			catch (const std::runtime_error &e) {
+				clearPrompt();
+				std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+				printPrompt();
+			}
 		}
 	}
 }
@@ -590,7 +572,12 @@ void ChatServer::startConsole() {
 			displayHelp();
 		}
 		else if (cmd.substr(0, 5) == "/kick") {
-			kickClient(cmd);
+			try {
+				kickClient(cmd);
+			}
+			catch (const std::exception &e) {
+				std::cout << "Can not kick client: " << e.what() << std::endl;
+			}
 		}
 		else if (cmd == "/list") {
 			listActiveUsers();
@@ -603,20 +590,44 @@ void ChatServer::startConsole() {
 }
 
 void ChatServer::updateActiveUsers() {
-	activeUsers_.clear();
-	for (const auto &file: fs::directory_iterator(USERS_DIR)) {
-		activeUsers_.emplace_back(file.path());
-	}
-	for (auto &it: users_) {
-		it.second.logout();
-	}
-	for (const auto &user: activeUsers_) {
-		auto it = users_.find(user["Username"]);
-		if (it != users_.end()) {
-			if(!it->second.isLoggedIn()) {
-				it->second.login();
+	loadUsers();
+	try {
+		Mysql mysql;
+		try {
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			if (!mysql.query("SELECT "
+					"`users`.`login`, "
+					"`active_sessions`.`ip`, "
+					"`active_sessions`.`port`, "
+					"`active_sessions`.`pid` "
+				"FROM "
+					"`active_sessions` "
+				"JOIN "
+					"`users` ON `users`.`id` = `active_sessions`.`user_id`"
+			)) {
+				std::stringstream ss;
+				ss << "MySQL error: " << mysql.getError();
+				throw std::runtime_error{ ss.str() };
+			}
+			auto rows = mysql.fetchAll();
+			activeUsers_.clear();
+			for (const auto &row: rows) {
+				activeUsers_.insert(row[0]);
+				users_.at(row[0]).setIp(row[1]);
+				users_.at(row[0]).setPort(std::stoi(row[2]));
+				users_.at(row[0]).setPid(std::stoi(row[3]));
+				users_.at(row[0]).setLoggedIn();
 			}
 		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			printPrompt();
+		}
+	}
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
 }
 
@@ -644,15 +655,15 @@ void ChatServer::cleanExit() {
 
 void ChatServer::terminateChild() const {
 	clearPrompt();
-	std::cout << "Exiting from child " << getpid() << "..." << std::endl;
+	std::cout << "\nExiting from child " << getpid() << "..." << std::endl;
 	if (connection_ != 0) {
+		removeSessionByPid(getpid());
 		strcpy(message_, "/response:kick");
 		if (write(connection_, message_, MESSAGE_LENGTH) == -1) {
 			std::cerr << "Error while calling write: " << strerror(errno) << std::endl;
 		}
 		close(connection_);
 	}
-	printPrompt();
 
 	exit(EXIT_SUCCESS);
 }
@@ -665,11 +676,7 @@ void ChatServer::childDeathHandler(int signum) {
 		}
 		else {
 			updateActiveUsers();
-			for (const auto &user: activeUsers_) {
-				if (stoi(user["Pid"]) == pid) {
-					removeSessionInfo(user["Username"]);
-				}
-			}
+			removeSessionByPid(pid);
 			auto it = children_.find(pid);
 			if (it != children_.end()) {
 				children_.erase(it);
@@ -709,7 +716,12 @@ void ChatServer::processNewClient() {
 	while (true) {
 		try {	
 			if (!loggedUser_.empty()) {
-				checkUnreadMessages();
+				try {
+					checkUnreadMessages();
+				}
+				catch (const std::logic_error &e) {
+					std::cout << "Logic error: " << e.what() << std::endl;
+				}
 			}
 
 			int bytes;
@@ -788,42 +800,66 @@ void ChatServer::processNewClient() {
 }
 
 void ChatServer::checkUnreadMessages() {	
-	while (fs::exists(MESSAGE_LOCK)) {
-		sleep(1);
+	try {
+		Mysql mysql;
+		try {
+			std::stringstream ss;
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			ss << 
+				"SELECT "
+					"`receiver_users`.`login`, "
+					"`messages`.`text`, "
+					"`unread_users`.`id`, "
+					"`messages`.`id`, "
+					"`sender_users`.`login`"
+				"FROM "
+					"`unread_messages` "
+				"JOIN "
+					"`messages` ON `messages`.`id` = `unread_messages`.`message_id` "
+				"JOIN "
+					"`users` AS `unread_users` ON `unread_messages`.`user_id` = `unread_users`.`id` "
+				"JOIN "
+					"`users` AS `sender_users` ON `messages`.`sender` = `sender_users`.`id` "
+				"LEFT JOIN "
+					"`users` AS `receiver_users` ON `messages`.`receiver` = `receiver_users`.`id` "
+				"WHERE "
+					"`unread_users`.`login` = '" << loggedUser_ << "' "
+				"ORDER BY `messages`.`sent`";
+			mysql.query(ss.str());
+			auto rows = mysql.fetchAll();
+			for (const auto &row: rows) {
+				if (row[0].empty()) {
+					strcpy(message_, (std::string{ "BROADCAST\n" } + row[4] + "\n" + row[1] + "\n").c_str());
+				}
+				else {
+					strcpy(message_, (std::string{ "PRIVATE\n" } + row[4] + "\n" + row[1] + "\n").c_str());
+				}
+				write(connection_, message_, MESSAGE_LENGTH);
+				ss.str(std::string{});
+				ss << "DELETE FROM `unread_messages` WHERE "
+					"`user_id` = " << row[2] << " AND "
+					"`message_id` = " << row[3];
+				mysql.query(ss.str());
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not load unread messages from database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
-	std::ofstream lock{ MESSAGE_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open messages lock file for writing" };
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
-	lock.close();
-	std::string userMessages{ TEMP_DIR + "/messages-" + loggedUser_ + ".txt" }; 
-	loadMessages(userMessages);
-	fs::remove(userMessages);
 
-	for (const auto &message: messages_) {
-		strcpy(message_, message->createTransferString().c_str());
-		write(connection_, message_, MESSAGE_LENGTH);
-	}
-	fs::remove(MESSAGE_LOCK);
-}
-
-void ChatServer::saveMessages() const {	
-	std::cout << "Saving chat history to file " << HISTORY_LOG << "..." << std::endl;
-	std::ofstream file(HISTORY_LOG, std::ios::out | std::ios::trunc);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Cannot open file " + HISTORY_LOG + " for write" };
-	}
-	file.close();
-
-	for (const auto &msg: messages_) {
-		msg->save(HISTORY_LOG);		
-	}
 }
 
 void ChatServer::loadUsers() {
 	Mysql mysql;
 	mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
-	if (!mysql.query("SELECT `id`, `login`, `name`, `password_hash` FROM `users` ORDER BY `id`")) {
+	if (!mysql.query("SELECT `id`, `login`, `password_hash`, `name` FROM `users` ORDER BY `id`")) {
 		std::stringstream ss;
 		ss << "MySQL error: " << mysql.getError() << std::endl;
 		throw std::runtime_error{ ss.str() };
@@ -833,36 +869,6 @@ void ChatServer::loadUsers() {
 	for (auto &user_data: users_list) {
 		users_.emplace(user_data[1], ChatUser(std::stoi(user_data[0]), user_data[1], user_data[2], user_data[3]));
 	}
-
-
-	/*while (fs::exists(USERLIST_LOCK)) {
-		sleep(1);
-	}
-	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
-	}
-	lock.close();
-	std::ifstream file(USER_CONFIG, std::ios::in);
-	if (!file.is_open()) {
-		fs::remove(USERLIST_LOCK);
-		throw std::runtime_error{ "Error: cannot open file " + USER_CONFIG + " for read" };
-	}
-
-	users_.clear();
-	while (!file.eof()) {
-		std::string login;
-		std::string password;
-		std::string name;
-		getline(file, login);
-		getline(file, password);
-		getline(file, name);
-		if (!login.empty()) {
-			users_.emplace(login, ChatUser(login, password, name));
-		}
-	}
-	file.close();
-	fs::remove(USERLIST_LOCK);*/
 }
 
 void ChatServer::saveUsers() const {
@@ -887,52 +893,6 @@ void ChatServer::saveUsers() const {
 	}
 }
 
-void ChatServer::loadMessages(const std::string &filename) {
-	if (!messages_.empty()) {
-		for(auto &message: messages_) {
-			message.reset();
-		}
-		messages_.clear();
-	}
-	if(!fs::exists(filename)) {
-		return;
-	}
-
-	std::ifstream file(filename, std::ios::in);
-	if (!file.is_open()) {
-		throw std::runtime_error{ "Error: cannot open file " + filename + " for read" };
-	}
-	while (!file.eof()) {
-		std::string message_type;
-		std::string sender;
-		std::string text;
-
-		getline(file, message_type);
-		getline(file, sender);
-		if (message_type == "BROADCAST") {
-			std::string users_unread_str;
-			
-			getline(file, users_unread_str);
-			getline(file, text);
-
-			messages_.emplace_back(std::make_shared<BroadcastMessage>(sender, text, users_, users_unread_str));
-		}
-		else if (message_type == "PRIVATE") {
-			std::string receiver;
-			std::string is_read_str;
-			bool is_read;
-
-			getline(file, receiver);
-			getline(file, is_read_str);
-			is_read = (is_read_str == "READ");
-			getline(file, text);
-
-			messages_.emplace_back(std::make_shared<PrivateMessage>(sender, receiver, text, is_read));
-		}
-	}
-	file.close();
-}
-
 void ChatServer::printPrompt() const {
 	std::cout << PROMPT << ' ';
 	std::cout.flush();
@@ -950,36 +910,40 @@ void ChatServer::clearPrompt() const {
 }
 
 std::string ChatServer::getClientIpAndPort() const {
-	return getClientIp() + ":" + getClientPort();
+	return getClientIp() + ":" + std::to_string(getClientPort());
 }
 
 std::string ChatServer::getClientIp() const {
 	return std::string{ inet_ntoa(client_.sin_addr) };
 }
 
-std::string ChatServer::getClientPort() const {
-	return std::to_string(ntohs(client_.sin_port));
+unsigned short ChatServer::getClientPort() const {
+	return ntohs(client_.sin_port);
 }
 
-void ChatServer::removeUserFromFile(const std::string &removedUser) {
-	while (fs::exists(USERLIST_LOCK)) {
-		sleep(1);
-	}
-	loadUsers();
+void ChatServer::removeUserFromDb(const std::string &removedUser) const {
+	try {
+		Mysql mysql;
+		try {
+			std::stringstream ss;
 
-	std::ofstream lock{ USERLIST_LOCK, std::ios::out | std::ios::trunc };
-	if (!lock.is_open()) {
-		throw std::runtime_error{ "Error: can not open create userlist lock file!" };
+			mysql.open(config_["DBName"], config_["DBHost"], config_["DBUser"], config_["DBPassword"]);
+			ss << "DELETE FROM `users` WHERE `login` = '" << removedUser << "'";
+			if (!mysql.query(ss.str())) {
+				throw std::runtime_error{ mysql.getError() };
+			}
+		}
+		catch (const std::runtime_error &e) {
+			clearPrompt();
+			std::cout << "Error: can not remove user from database (" << e.what() << ")" << std::endl;
+			printPrompt();
+		}
 	}
-	lock.close();
-
-	auto it = users_.find(removedUser);
-	if (it != users_.end()) {
-		users_.erase(it);
+	catch (const std::runtime_error &e) {
+		clearPrompt();
+		std::cout << "Error: can not connect to database (" << e.what() << ")" << std::endl;
+		printPrompt();
 	}
-	
-	fs::remove(USERLIST_LOCK);
-	saveUsers();
 }
 
 void ChatServer::printSystemInformation() const {

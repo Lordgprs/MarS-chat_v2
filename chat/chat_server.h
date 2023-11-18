@@ -70,26 +70,19 @@ private:
 	void cleanExit();
 	std::string getClientIpAndPort() const;
 	std::string getClientIp() const;
-	std::string getClientPort() const;
-	void removeUserFromFile(const std::string &);
+	unsigned short getClientPort() const;
+	void removeUserFromDb(const std::string &) const;
 	void displayHelp() const;
-	void writeSessionInfo() const;
-	void removeSessionInfo(const std::string &username) const;
+	void removeSessionByPid(pid_t pid) const;
 	void updateActiveUsers();
 	void listActiveUsers();
 	void kickClient(const std::string &cmd);
-	void writeMessageToHistory(std::shared_ptr<ChatMessage> message) const;
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string TEMP_DIR { "/tmp/chat_server" };
-	const std::string USERS_DIR { TEMP_DIR + "/users" };
-	const std::string USER_CONFIG{ "users.cfg" };
-	const std::string HISTORY_LOG{ "messages.log" };
-	const std::string HISTORY_LOCK{ TEMP_DIR + "/history.lock" };
-	const std::string MESSAGE_LOCK{ USERS_DIR + "/messages.lock" };
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
-	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
+	//const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
 	const int BACKLOG{ 5 };
 
 #if defined(_WIN64) or defined(_WIN32)
@@ -98,7 +91,7 @@ private:
 
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
-	std::vector<ConfigFile> activeUsers_;
+	std::set<std::string> activeUsers_;
 	std::string loggedUser_;
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
@@ -113,9 +106,3 @@ private:
 	Mysql mysql_;
 };
 
-struct ClientInformation {
-	std::string username;
-	pid_t pid;
-	std::string ip;
-	unsigned short port;
-};

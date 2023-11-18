@@ -2,6 +2,8 @@
 
 #include <sstream>
 #include <stdexcept>
+#include <iostream>
+#include <iomanip>
 
 Mysql::Mysql() {
 	mysql_init(&connfd_);
@@ -34,12 +36,13 @@ void Mysql::open(
 }
 
 bool Mysql::query(const std::string &req) {
+	error_.clear();
 	mysql_query(&connfd_, req.c_str());
 	result_ = mysql_store_result(&connfd_);
-	if (result_ == nullptr) {
+	if (mysql_error(&connfd_)) {
 		error_ = mysql_error(&connfd_);
 	}
-	return result_ != nullptr;
+	return error_.empty();
 }
 
 const std::string &Mysql::getError() const {
@@ -53,7 +56,12 @@ std::list<std::vector<std::string>> &Mysql::fetchAll() {
 	while (auto row = mysql_fetch_row(result_)) {
 		std::vector<std::string> row_array;
 		for (unsigned i = 0; i < mysql_num_fields(result_); ++i) {
-			row_array.emplace_back(row[i]);
+			if (row[i] == nullptr) {
+				row_array.emplace_back(std::string{});
+			}
+			else {
+				row_array.emplace_back(row[i]);
+			}
 		}
 		fields_.push_back(std::move(row_array));
 	}
