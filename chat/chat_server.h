@@ -1,4 +1,6 @@
 #pragma once
+
+#include "mysql.h"
 #include "chat_user.h"
 #include "chat_message.h"
 #include "broadcast_message.h"
@@ -21,12 +23,14 @@ struct WindowsVersion {
 	unsigned major, minor, build;
 };
 #elif defined(__linux__)
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+extern "C" {
+	#include <unistd.h>
+	#include <sys/socket.h>
+	#include <sys/types.h>
+	#include <sys/wait.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+}
 #endif
 
 class ChatServer final {
@@ -53,6 +57,7 @@ private:
 	void saveUsers() const;
 	void saveMessages() const; // save all messages to file
 	void loadUsers(); // load user list from file
+	void setUsersInactive() const;
 	void loadMessages(const std::string &filename); // load message list from file
 	void printSystemInformation() const; // print information about process and OS
 	void printPrompt() const;
@@ -64,25 +69,20 @@ private:
 	void terminateChild() const;
 	void cleanExit();
 	std::string getClientIpAndPort() const;
-	void removeUserFromFile(const std::string &);
+	std::string getClientIp() const;
+	unsigned short getClientPort() const;
+	void removeUserFromDb(const std::string &) const;
 	void displayHelp() const;
-	void writeUserFile() const;
-	void removeUserFile(const std::string &username) const;
+	void removeSessionByPid(pid_t pid) const;
 	void updateActiveUsers();
 	void listActiveUsers();
 	void kickClient(const std::string &cmd);
-	void writeMessageToHistory(std::shared_ptr<ChatMessage> message) const;
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
 	const std::string TEMP_DIR { "/tmp/chat_server" };
-	const std::string USERS_DIR { TEMP_DIR + "/users" };
-	const std::string USER_CONFIG{ "users.cfg" };
-	const std::string HISTORY_LOG{ "messages.log" };
-	const std::string HISTORY_LOCK{ TEMP_DIR + "/history.lock" };
-	const std::string MESSAGE_LOCK{ USERS_DIR + "/messages.lock" };
 	const std::string CONFIG_FILE{ "server.cfg" };
 	const std::string PROMPT{ "server>" };
-	const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
+	//const std::string USERLIST_LOCK{ TEMP_DIR + "/userlist.lock" };
 	const int BACKLOG{ 5 };
 
 #if defined(_WIN64) or defined(_WIN32)
@@ -91,7 +91,7 @@ private:
 
 	std::map<std::string, ChatUser> users_;
 	std::vector<std::shared_ptr<ChatMessage>> messages_;
-	std::vector<ConfigFile> activeUsers_;
+	std::set<std::string> activeUsers_;
 	std::string loggedUser_;
 	ConfigFile config_{ CONFIG_FILE };
 	sockaddr_in server_;
@@ -103,11 +103,6 @@ private:
 	mutable char message_[MESSAGE_LENGTH];
 	bool mainLoopActive_{ true };
 	int connection_;
+	Mysql mysql_;
 };
 
-struct ClientInformation {
-	std::string username;
-	pid_t pid;
-	std::string ip;
-	unsigned short port;
-};

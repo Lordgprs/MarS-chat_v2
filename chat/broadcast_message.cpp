@@ -77,6 +77,32 @@ void BroadcastMessage::save(const std::string &filename) const {
 	file.close();
 }
 
+void BroadcastMessage::save(Mysql &mysql) const {
+	std::stringstream ss;
+	mysql.query("SELECT COALESCE(max(`id`), -1) FROM `messages`");
+	auto rows = mysql.fetchAll();
+	unsigned new_id = std::stoi(rows.front().at(0)) + 1;
+	ss << "INSERT INTO `messages` (`id`, `type`, `sender`, `text`) VALUES (" <<
+		new_id << ", 'BROADCAST', "
+		"(SELECT `id` FROM `users` WHERE `login` = '" << sender_ << "'), "
+		"'" << text_ << "')";
+	if (!mysql.query(ss.str())) {
+		std::cout << ss.str() << std::endl;
+		std::cout << mysql.getError() << std::endl;
+	}
+	
+	for (auto it: users_unread_) {
+		ss.str(std::string{});
+		ss << "INSERT INTO `unread_messages` (`message_id`, `user_id`) "
+			"VALUES (" << new_id << ", "
+			"(SELECT `id` FROM `users` WHERE `login` = '" << it.first << "'))";
+		if (!mysql.query(ss.str())) {
+			std::cout << ss.str() << std::endl;
+			std::cout << mysql.getError() << std::endl;
+		}
+	}
+}
+
 std::string BroadcastMessage::createTransferString() const {
 	return std::string{ "BROADCAST\n" } + sender_ + "\n" + text_ + "\n";
 }
