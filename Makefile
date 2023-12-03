@@ -4,6 +4,7 @@ C_SRC = \
 	$(SRC_DIR)/chat_client.cpp \
 	$(SRC_DIR)/project_lib.cpp \
 	$(SRC_DIR)/config_file.cpp \
+	$(SRC_DIR)/logger.cpp \
 	$(SRC_DIR)/client.cpp
 S_SRC = \
 	$(SRC_DIR)/private_message.cpp \
@@ -14,6 +15,7 @@ S_SRC = \
 	$(SRC_DIR)/SHA256.cpp \
 	$(SRC_DIR)/project_lib.cpp \
 	$(SRC_DIR)/mysql.cpp \
+	$(SRC_DIR)/logger.cpp \
 	$(SRC_DIR)/server.cpp
 
 C_TARGET = $(BINDIR)/chat

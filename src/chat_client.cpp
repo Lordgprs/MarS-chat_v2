@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#include <sstream>
 #if defined(__linux__)
 #include <sys/utsname.h>
 #elif defined(_WIN64) or defined(_WIN32)
@@ -20,6 +21,18 @@ ChatClient::ChatClient() {
 	mainPid_ = getpid();
 	printSystemInformation();
 	fs::create_directory(TEMP_DIR);
+
+	try {
+		logger_ = std::make_unique<Logger>(config_["LogFile"]);
+	}
+	catch (const std::out_of_range &e) {
+		throw std::runtime_error{ "Unknown log file path" };
+	}
+	catch (const std::runtime_error &e) {
+		std::stringstream ss;
+		ss << "Can not open log file: " << std::quoted(config_["LogFile"]) << ". Check the path and permissions";
+		throw std::runtime_error{ ss.str() };
+	}
 
 	std::cout <<
 		"Welcome to the chat,\n"
@@ -40,7 +53,7 @@ ChatClient::ChatClient() {
 		if(fs::exists(TEMP_DIR)) {
 			fs::remove_all(TEMP_DIR);
 		}
-		throw std::runtime_error{ "Could not connect to server..." };
+		throw std::runtime_error{ "Could not connect to server" };
 	}
 
 	signal(SIGCHLD, SIG_IGN);
@@ -157,7 +170,6 @@ void ChatClient::signIn() {
 	std::fill(message_, message_ + MESSAGE_LENGTH, '\0');
 	strcpy(message_, cmd.c_str());
 	sendRequest();
-	// std::cout << "Receiving response: " << std::endl;
 	receiveResponse();
 	if (strncmp(message_, "/response:success", 17) == 0) {
 		std::cout << "Login successful" << std::endl;
@@ -347,6 +359,7 @@ void ChatClient::work() {
 				}
 			}
 			else if (!loggedUser_.empty() && *message_ != '/') {
+				*logger_ << std::string{ message_ };
 				sendRequest();
 			}
 			else if (

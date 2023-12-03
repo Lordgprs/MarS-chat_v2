@@ -19,7 +19,15 @@ void Logger::write(const std::string &line) {
 	mutex_.unlock();
 }
 
+bool Logger::isEof() const {
+	return file_.eof();
+}
+
 std::string Logger::readline() {
+	if (file_.eof()) {
+		return std::string{};
+	}
+
 	std::string result;
 	mutex_.lock_shared();
 	getline(file_, result);

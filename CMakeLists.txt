@@ -20,6 +20,7 @@ add_executable(chat_server
 	${PROJECT_SOURCE_DIR}/SHA256.cpp 
 	${PROJECT_SOURCE_DIR}/project_lib.cpp 
 	${PROJECT_SOURCE_DIR}/mysql.cpp 
+	${PROJECT_SOURCE_DIR}/logger.cpp
 	${PROJECT_SOURCE_DIR}/server.cpp)
 set_property(TARGET chat_server PROPERTY CXX_STANDARD 20)
 target_link_libraries(chat_server mysqlclient)

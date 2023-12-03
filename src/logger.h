@@ -9,6 +9,7 @@ public:
 	Logger(const std::string &filename);
 	~Logger();
 	void write(const std::string &line);
+	bool isEof() const;
 	friend void operator<<(Logger &logger, const std::string &line);
 	std::string readline();
 
