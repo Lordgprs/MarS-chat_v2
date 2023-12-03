@@ -16,6 +16,7 @@
 #include <cstring>
 #include <algorithm>
 #include <stdexcept>
+#include <atomic>
 
 #if defined(_WIN64) or defined(_WIN32)
 #include <Windows.h>
@@ -101,7 +102,7 @@ private:
 	pid_t consolePid_;
 	std::set<pid_t> children_;
 	mutable char message_[MESSAGE_LENGTH];
-	bool mainLoopActive_{ true };
+	std::atomic_bool mainLoopActive_{ true };
 	int connection_;
 	Mysql mysql_;
 };

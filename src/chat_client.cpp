@@ -15,7 +15,7 @@ extern "C" NTSTATUS __stdcall RtlGetVersion(OSVERSIONINFOEXW * lpVersionInformat
 
 namespace fs = std::filesystem;
 
-// construct
+// constructor
 ChatClient::ChatClient() {
 	mainPid_ = getpid();
 	printSystemInformation();

@@ -1,4 +1,4 @@
-SRC_DIR = chat
+SRC_DIR = src
 BINDIR = bin
 C_SRC = \
 	$(SRC_DIR)/chat_client.cpp \
