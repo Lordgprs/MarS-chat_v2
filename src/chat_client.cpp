@@ -210,12 +210,15 @@ void ChatClient::startPoller() {
 		if (tokens.size() != 3) {
 			continue; // Wrong message
 		}
+		std::stringstream ss;
 		clearPrompt();
-		std::cout << tokens[1] << ": ";
+		ss << tokens[1] << ": ";
 		if (tokens[0] == "PRIVATE") {
-			std::cout << '@' << loggedUser_ << ' ';
+			ss << '@' << loggedUser_ << ' ';
 		}
-		std::cout << tokens[2] << std::endl;
+		ss << tokens[2];
+		std::cout << ss.str() << std::endl;
+		*logger_ << ss.str();
 		printPrompt();
 	}
 }
