@@ -1,5 +1,7 @@
 #pragma once
+
 #include "config_file.h"
+#include "logger.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -70,5 +72,6 @@ private:
 	pid_t mainPid_;
 	pid_t pollerPid_;
 	int sockFd_;
+	std::unique_ptr<Logger> logger_;
 	mutable char message_[MESSAGE_LENGTH];
 };

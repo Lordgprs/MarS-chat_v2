@@ -6,6 +6,7 @@
 #include "broadcast_message.h"
 #include "private_message.h"
 #include "config_file.h"
+#include "logger.h"
 
 #include <iostream>
 #include <string>
@@ -16,6 +17,7 @@
 #include <cstring>
 #include <algorithm>
 #include <stdexcept>
+#include <atomic>
 
 #if defined(_WIN64) or defined(_WIN32)
 #include <Windows.h>
@@ -76,6 +78,7 @@ private:
 	void removeSessionByPid(pid_t pid) const;
 	void updateActiveUsers();
 	void listActiveUsers();
+	void printLineFromLog() const;
 	void kickClient(const std::string &cmd);
 
 	static const unsigned short MESSAGE_LENGTH{ 1024 };
@@ -101,7 +104,8 @@ private:
 	pid_t consolePid_;
 	std::set<pid_t> children_;
 	mutable char message_[MESSAGE_LENGTH];
-	bool mainLoopActive_{ true };
+	std::atomic_bool mainLoopActive_{ true };
+	std::unique_ptr<Logger> logger_;
 	int connection_;
 	Mysql mysql_;
 };

@@ -26,6 +26,18 @@ ChatServer::ChatServer() {
 	mainPid_ = getpid();
 	printSystemInformation();
 
+	try {
+		logger_ = std::make_unique<Logger>(config_["LogFile"]);
+	}
+	catch (const std::out_of_range &e) {
+		throw std::runtime_error{ "Unknown log file path" };
+	}
+	catch (const std::runtime_error &e) {
+		std::stringstream ss;
+		ss << "Can not open log file: " << std::quoted(config_["LogFile"]) << ". Check the path and permissions";
+		throw std::runtime_error{ ss.str() };
+	}
+
 	if (fs::exists(TEMP_DIR)) {
 		throw std::runtime_error{
 			std::string{ "Temporary directory " } +
@@ -100,6 +112,7 @@ void ChatServer::displayHelp() const {
 	std::cout << "Available commands:\n"
 		" /help: chat help, displays a list of commands to manage the chat\n"
 		" /list: list connected users\n"
+		" /log: print one line from log\n"
 		" /kick <username>: kick connected user\n"
 		" /remove: delete inactive user\n"
 		" /exit, /quit, Ctrl-C: close the program\n"
@@ -371,7 +384,7 @@ void ChatServer::sendMessage() {
 		}
 		catch (const std::runtime_error &e) {
 			clearPrompt();
-			std::cout << "Error: can not save message to database (" << e.what() << ")" << std::endl;
+			std::cout << "Error: can not update last activity field in the database (" << e.what() << ")" << std::endl;
 			printPrompt();
 		}
 	}
@@ -415,6 +428,11 @@ void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receive
 		throw std::invalid_argument("RECEIVER_DOES_NOT_EXIST");
 	}
 
+	std::stringstream ss;
+
+	ss << sender.getLogin() << ": @" << receiverName << ' ' << messageText;
+	*logger_ << ss.str();
+
 	auto newMessage = std::make_shared<PrivateMessage>(sender.getLogin(), receiverName, messageText);
 	
 	try {
@@ -437,6 +455,11 @@ void ChatServer::sendPrivateMessage(ChatUser& sender, const std::string& receive
 }
 
 void ChatServer::sendBroadcastMessage(ChatUser& sender, const std::string& message) {
+	std::stringstream ss;
+
+	ss << sender.getLogin() << ": " << message;
+	*logger_ << ss.str();
+
 	// Dynamically allocate memory for new message
 	auto newMessage = std::make_shared<BroadcastMessage>(sender.getLogin(), message, users_);
 	try {
@@ -582,11 +605,23 @@ void ChatServer::startConsole() {
 		else if (cmd == "/list") {
 			listActiveUsers();
 		}
+		else if (cmd == "/log") {
+			printLineFromLog();
+		}
 		else if (cmd.substr(0, 7) == "/remove") {
 			removeUser(cmd);
 		}
 		printPrompt();
 	}
+}
+
+void ChatServer::printLineFromLog() const {
+	clearPrompt();
+	if (logger_->isEof()) {
+		std::cout << "Error: EOF has been reached" << std::endl;
+		return;
+	}
+	std::cout << logger_->readline() << std::endl;
 }
 
 void ChatServer::updateActiveUsers() {
@@ -637,8 +672,7 @@ void ChatServer::cleanExit() {
 	}
 	mainLoopActive_ = false;
 	clearPrompt();
-	std::cout << "\nPreparing server for clean exit..." << std::endl;
-	std::cout << "Killing all childs..." << std::endl;
+	std::cout << "Killing all children..." << std::endl;
 	for (auto child: children_) {
 		kill(child, SIGTERM);
 	}
@@ -654,8 +688,6 @@ void ChatServer::cleanExit() {
 }
 
 void ChatServer::terminateChild() const {
-	clearPrompt();
-	std::cout << "\nExiting from child " << getpid() << "..." << std::endl;
 	if (connection_ != 0) {
 		removeSessionByPid(getpid());
 		strcpy(message_, "/response:kick");
